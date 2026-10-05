@@ -1,1 +1,98 @@
-body { margin: 0; font-family: system-ui, sans-serif; }
+:root {
+  color-scheme: dark;
+  --surface-0: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #242423;
+  --line: #333331;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8a8980;
+  --series-spec: #3987e5;
+  --series-cut: #d95926;
+  --series-env: #199e70;
+  --accent: #3987e5;
+  --warn: #c98500;
+  --on: #199e70;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--surface-0); color: var(--text-primary); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input { font: inherit; color: inherit; }
+button { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.tog.on { background: var(--on); border-color: var(--on); color: #fff; }
+button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; }
+button.remove { padding: 2px 8px; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 13px; margin: 14px 0 8px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+h2:first-child { margin-top: 0; }
+.hint { color: var(--text-muted); font-size: 12px; }
+.warn { color: var(--warn); font-size: 12px; }
+.spacer { flex: 1; }
+
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+.topbar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--surface-1); border-bottom: 1px solid var(--line); }
+.transport { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface-1); border-bottom: 1px solid var(--line); }
+.transport .seek { flex: 1; }
+.transport .time { font-variant-numeric: tabular-nums; color: var(--text-secondary); min-width: 100px; }
+.transport .masking { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+.columns { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 1000px) { .columns { grid-template-columns: 1fr; } }
+.stems { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.side { display: flex; flex-direction: column; gap: 12px; }
+.panel { background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+
+.dropzone { border: 1px dashed var(--line); border-radius: 6px; padding: 40px 16px; text-align: center; color: var(--text-secondary); cursor: pointer; background: var(--surface-1); }
+.dropzone.over { border-color: var(--accent); color: var(--text-primary); }
+.dropzone.compact { padding: 5px 12px; border-style: solid; }
+
+.stem { background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.stem.muted { opacity: 0.6; }
+.stem.disabled .stem-body { opacity: 0.5; }
+.stem-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.stem-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stem-status { color: var(--text-muted); font-size: 12px; }
+.tog-label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
+.stem-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 12px; }
+@media (max-width: 1300px) { .stem-body { grid-template-columns: 1fr; } }
+.stem-controls { display: flex; flex-direction: column; gap: 4px; }
+.readouts { display: flex; gap: 12px; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.stem-plot { min-width: 0; }
+.plot { width: 100%; height: auto; display: block; }
+.plot-placeholder { height: 160px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); border: 1px dashed var(--line); border-radius: 4px; }
+
+.slider { display: grid; grid-template-columns: 104px 1fr 64px; align-items: center; gap: 8px; font-size: 12px; }
+.slider-label { color: var(--text-secondary); }
+.slider-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.slider input[type="range"] { width: 100%; margin: 0; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; }
+.check { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+
+.maskrow { display: flex; gap: 2px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.maskrow-label { font-size: 11px; color: var(--text-secondary); width: 60px; }
+.maskcell { padding: 2px 0; width: 30px; font-size: 10px; border-radius: 3px; border: 1px solid var(--line); }
+.maskcell.m2 { background: var(--surface-2); color: var(--text-secondary); }
+.maskcell.m1 { background: #4a3a1a; color: var(--text-primary); border-color: var(--warn); }
+.maskcell.m0 { background: #4a1f1f; color: var(--text-primary); border-color: #e66767; }
+
+.plot .grid { stroke: var(--line); stroke-width: 1; }
+.plot .axis { fill: var(--text-muted); font-size: 9px; }
+.plot .legend { fill: var(--text-secondary); font-size: 9px; }
+.plot .bar-spec { fill: var(--series-spec); opacity: 0.85; }
+.plot .bar-cut { fill: var(--series-cut); opacity: 0.9; }
+.plot .line-env { fill: none; stroke: var(--series-env); stroke-width: 2; }
+.plot .clamp { fill: var(--text-primary); font-size: 10px; font-weight: bold; }
+.plot .sw-spec { fill: var(--series-spec); }
+.plot .sw-cut { fill: var(--series-cut); }
+.plot .sw-env { fill: var(--series-env); font-weight: bold; }
+
+.matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
+.matrix th, .matrix td { border: 1px solid var(--line); padding: 2px; text-align: center; }
+.matrix th { color: var(--text-secondary); font-weight: normal; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+.matrix .corner { color: var(--text-muted); }
+.matrix .diag { background: var(--surface-2); }
+.matrix .margin { background: var(--surface-0); color: var(--text-muted); }
+.matrix input { width: 48px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; text-align: center; }
+.files ul { margin: 8px 0 0; padding-left: 18px; }
+.files li { margin: 3px 0; }

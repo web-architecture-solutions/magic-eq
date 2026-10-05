@@ -277,3 +277,25 @@ Roughly 600 to 800 lines of JavaScript. The milestone that proves the concept
 is step 3 with two or three stems (bass, guitar, keys) and the global `W` knob:
 if sweeping `W` from 0 to a few dB at matched loudness audibly separates the
 stems without sounding thinner, the idea works and the rest is UI.
+
+## 9. Implementation notes (v1 as built)
+
+The v1 prototype lives in `src/`; see the README for the layout and knobs.
+Decisions made while building that refine section 3:
+
+- **Absolute spectra.** Analysis returns `bandDb` calibrated so a full-scale
+  sine reads 0 dB in its band; `S = bandDb - peakDb` feeds the self EQ and the
+  display, and the cross EQ uses `bandDb + fader`.
+- **Floor.** No cross cuts where the target is more than `floorDb` (default
+  40 dB) below its own peak. Without it, a stem's silent bands count as
+  dominated by everyone and the stacking readout becomes meaningless.
+- **Stacking.** The cross sum is divided by `n^stackNorm` (default 0.5) where
+  `n` is the number of stems contributing a cut to that band, then clamped.
+- **Gate.** `a_j(t)` is the one-pole response of the stem's gate transitions,
+  which is exactly `AudioParam.setTargetAtTime`, so the live graph, the offline
+  render, the recipe and the tests all agree. Per stem and band there is one
+  event per transition of any source with a non-zero cut there.
+- **Make-up.** Live playback uses the band-spectrum estimate; export measures
+  the rendered RMS and applies the residual, recording both in the recipe.
+- **Export** ignores solo/mute, renders stems at source level (fader 0) and the
+  mix at fader level, and optionally trims the mix to -1 dBFS if it clips.
