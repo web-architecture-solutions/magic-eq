@@ -104,10 +104,26 @@ G_ii(b) = - alpha_i * max(0, S_i(b) - T)      # "level": damp the peaks
 
 ### Cross (inverse) EQ
 
+The self EQ is level-independent; the cross EQ is not. The cut on `i` in
+band `b` must be driven by how much `j` dominates `i` there *at mix level*,
+not by how loud `j` is relative to its own peak. Normalising every stem to
+itself makes a quiet pad carve as hard as the bass; analysing raw record-level
+stems carves according to the tracking balance instead of the mix balance.
+So either stems are exported post-fader, or the tool has a fader row `L_i`.
+
 ```
-P_j(b)  = clip(S_j(b) + L_j - floor, 0, D) / D   # "presence" of j in band b, 0..1
-G_ij(b) = - w_ij * P_j(b) * O_ij(b)              # cut i where j is present
+A_i(b)  = S_i(b) + L_i                            # absolute band level at mix position
+D_ij(b) = clip(A_j(b) - A_i(b) + H, 0, D) / D     # how much j dominates i in b, 0..1
+G_ij(b) = - w_ij * D_ij(b) * M(b) * M_i(b)        # cut i where j dominates it
 ```
+
+- `H` (dB): headroom so that a band where `i` and `j` are roughly equal still
+  gets a partial cut. If `i` already dominates, cutting it is pointless and
+  only thins it, so `D_ij` is 0 there.
+- `M(b)` and `M_i(b)` (0..1): per-band masks, one row of 16 at mix level and
+  one per track, multiplying the computed cut. A locked band is 0. These are
+  the "don't cut here" and "cut less here" controls for sounds that are
+  deliberately layered.
 
 - `w_ij` (dB): how much of stem `j` to carve out of stem `i`. Stored as a
   matrix but edited through three layers that multiply together:
@@ -115,11 +131,9 @@ G_ij(b) = - w_ij * P_j(b) * O_ij(b)              # cut i where j is present
   everyone else"), a per-target column scalar ("how much does the guitar
   accept cuts"), and an optional per-pair override. This is the "one master
   knob" that the manual workflow cannot have.
-- `O_ij(b)`: optional overlap weighting, so `i` is only cut where `i` itself
-  has energy near `j`. The simplest form is `P_i(b)`; the Hafezi and Reiss
-  masking measure is a better one if the simple form proves too blunt.
-- Asymmetry gives priority: a lead vocal has a large row scalar and a small
-  column scalar.
+- Asymmetry gives priority: a lead vocal has a large row scalar and a column
+  scalar of 0, so it carves others but accepts no cuts. This is the formal
+  version of "leave leads and vocals out of the process".
 
 ### Total
 
@@ -132,13 +146,35 @@ makeup_i = chosen so that loudness(i after EQ) == loudness(i before EQ)
 stop cuts from stacking when many stems share a band, which is the failure
 mode the literature also has to guard against.
 
-### Time awareness (later)
+### Time awareness
 
 A whole-song average ignores arrangement: the piano and the guitar may never
-play at the same time. The cheap fix that keeps the EQ static is to compute
-`P_j` and `O_ij` only over frames where both stems are above an RMS gate.
-Section-aware curves (one EQ per song section) are a possible v2, and would
-still be static within a section.
+play at the same time. The manual hack (automate the "bass cuts" EQ on when
+the bass enters and off when it drops out) is a gate with a slow attack and
+release, and it generalises cleanly:
+
+```
+a_j(t)     = smoothed RMS gate of stem j, 0..1, attack/release ~ 100s of ms
+G_i(b, t)  = G_ii(b) + sum_{j != i} a_j(t) * G_ij(b)
+```
+
+Each stem's cuts on everyone else fade in when it plays. The motion is far too
+slow to hear as motion, so the result still sounds like a static EQ. The
+spectra `S_j` are also computed only over frames where `a_j > 0`, so a stem
+that plays for eight bars is not averaged against a song of silence.
+
+A timescale knob slides this from "arrangement" (seconds) toward
+Trackspacer-style frame-rate dynamics (ms) if that ever proves worth the
+audible motion. Section-aware static curves (one per song section) are an
+alternative v2.
+
+### Layerability diagnostic (v2)
+
+Some overlap is intentional: a doubled sine under a kick or bass layers well
+because it is simple. A cheap "complexity" score per stem per band (spectral
+flatness, number of local modes, crest factor) lets the tool report where
+overlap is both high and complex on both sides. That report says where to
+listen, re-record, pan, or lock a band; it does not drive cuts.
 
 ## 4. How to realise the curves
 
@@ -184,6 +220,24 @@ Three ways to get this into a DAW, in order of realism:
 
 Option 3 is the one to prototype, and it may be good enough to ship. Option 1
 is the eventual "real" product if realtime re-analysis turns out to matter.
+
+### Shrinking the round trip
+
+Record in the DAW, bulk-export stems, process, re-import is one round trip,
+and every major DAW does bulk stem export. Ways to make it cheaper:
+
+- **Export a recipe, not audio.** 16 band gains per track, pasted into the
+  DAW's own EQ, keeps the DAW as the source of truth. The time gating is lost
+  unless on/off automation is also written.
+- **Script the DAW.** In Reaper, ReaScript (Lua or Python) can render stems,
+  call the analysis, set ReaEQ band gains, and write the gate envelopes as
+  automation, with nothing to compile. This is the most streamlined path
+  available without writing a plugin.
+- **Watch a folder.** The tool processes whatever lands in the DAW's stem
+  export folder and writes processed stems and the recipe next to it.
+  Crude, but DAW-agnostic.
+- Whichever path: stems must carry their mix level (post-fader export, or a
+  fader row in the tool), see the cross EQ section.
 
 ## 7. Repo state
 
