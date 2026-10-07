@@ -27,50 +27,53 @@ sample rate; later stems at a different rate are resampled to it on load.
 
 ## Workflow
 
-1. **Drop stems.** Each one is decoded, mixed to mono, and analysed in a Web
+1. **Import stems.** Each one is decoded, mixed to mono, and analysed in a Web
    Worker: a Welch-averaged spectrum in 16 log bands (20 Hz to 20 kHz, 0.625
    octave each) over the frames where the stem is actually playing, plus an
    activity gate and the "mode envelope" through its spectral peaks.
-2. **Set faders** to the intended mix level, or tick *stems are post-fader* if
+2. **Set faders** to the intended mix level, or tick *Stems are post-fader* if
    they were exported with the mix balance baked in. The cross cuts are computed
    at mix level, so this matters.
-3. **Turn up W.** That is the one master knob: how deep each stem's cuts on the
-   others go. Everything else is a refinement.
+3. **Turn up Unmask.** Then Scoop, then Flatten if you want it. Every depth knob
+   is a contrast in dB: the part of a stem's cut that would be the same in every
+   audible band is removed (make-up gain would cancel it anyway), so each knob
+   keeps doing something across its whole range, however many stems you load.
 4. **A/B.** *Byp* on a stem, or *Bypass all*, is loudness-matched so the louder
-   side doesn't win by default. The *overlap* readout is a crude masking score
-   (sum over pairs and bands of the overlapping power), before vs after.
-5. **Export.** Each stem is rendered through its EQ (including the gate
-   automation) at its source level, the mix at fader level, and `recipe.json`
+   side doesn't win by default. Each stem shows its *effect* (contrast actually
+   applied, in dB) and the *overlap* readout is a crude masking score.
+5. **Export.** Each stem is rendered through its EQ (including the activity
+   following) at its source level, the mix at fader level, and `recipe.json`
    holds the per-band gains, the gate transitions, and the sparse automation.
+
+Three views: **Mix** has the five knobs that matter and a card per stem.
+**Advanced** adds per-stem multipliers, band locks, the full model knobs, the
+gate settings, and a description of every control. **Matrix** shows who carves
+whom (colour) with the editable per-pair weights and the row/column scalars.
+Hover any control for what it does and what it interacts with.
 
 ## Knobs
 
-Per stem:
+Mix view (the macro knobs):
 
-| Control | Meaning |
-|---|---|
-| fader | Intended mix level, used for the cross cuts only. |
-| level α | Damp the stem's own peaks (bands within *T* dB of its peak). |
-| scoop β | Cut the valleys between the stem's modes; leaves the modes at 0 dB. |
-| carves × | Row scalar: how hard this stem carves the others. |
-| accepts × | Column scalar: how much this stem accepts cuts. 0 for leads and vocals. |
-| mask | Per-band multiplier (1, ½, 0) on this stem's cuts. 0 locks a band. |
-| in model | Untick to leave a stem untouched and uncarving (a wide pad, say). |
+| Knob | Symbol | Meaning |
+|---|---|---|
+| Unmask | W | Depth of the cross-track cuts, as contrast across each stem's audible range. |
+| Flatten | α | Damp a stem's own peaks: full depth at its loudest band, nothing at *Flatten reach* below. |
+| Scoop | β | Cut the valleys between a stem's modes, leaving the modes at 0 dB. |
+| Selectivity | H | 0: cut wherever another stem is at least as loud; 1: only where it clearly dominates. |
+| Ceiling | M | Soft limit on any band's total cut (linear to 75%, then compressed). |
 
-Mix level:
+Per stem: fader, mute, solo, bypass, *in model*. In Advanced also *Flatten ×*
+and *Scoop ×* (multipliers on the global amounts, or absolute dB when
+uncoupled), *Carves others* (row scalar), *Accepts cuts* (column scalar, 0 for
+leads and vocals), and a 16-band *band lock*.
 
-| Knob | Meaning |
-|---|---|
-| cross depth W | Global cut depth in dB. The master knob. |
-| headroom H | A band is cut even when the other stem is up to *H* dB quieter there. |
-| range D | Dominance (in dB) at which the cut reaches full depth. |
-| max cut | Clamp on any band's total cut. |
-| stacking | Divide stacked cuts by n^stacking (0 = plain sum, 1 = average). |
-| floor | No cross cuts where the target is this far below its own peak. |
-| level thresh. T | The α term only touches bands within *T* dB of the peak. |
-| mix mask | Per-band multiplier on every cut in the session. |
-| pair weights | N×N grid: row carves column, multiplied with the scalars and W. |
-| gate | Each stem's cuts on the others fade in (attack) while it plays and out (release) when it stops. The threshold needs a re-analysis. |
+Advanced model knobs: *Dominance range* (D), *Audible range*, *Flatten reach*
+(T), *Scoop reach*, *Combine others* (max / sum / mean), *Couple stem knobs*,
+*Mix band lock*; and *Follow activity* with attack, release and threshold.
+
+Flatten and Scoop oppose each other (one cuts peaks, the other cuts valleys);
+equal amounts of both tend toward a flat cut that make-up cancels.
 
 ## Layout
 
@@ -84,6 +87,8 @@ src/state/    reducer and selectors
 test/         vitest over src/dsp with synthetic stems
 scripts/      fixture generator
 ```
+
+`src/ui/params.js` is the single dictionary behind every label and tooltip.
 
 The live chain and the offline render use the same builder, so what you hear is
 what you export. The live make-up gain is an estimate from the band spectrum;

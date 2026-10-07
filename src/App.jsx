@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { reducer, initialState, newStem, pairArray, effectiveMuted } from "./state/reducer.js";
 import { deriveCurves } from "./dsp/model.js";
-import { buildGainTimelines } from "./dsp/timeline.js";
+import { buildGainTimelines, timelineValueAt } from "./dsp/timeline.js";
+import { NUM_BANDS } from "./dsp/bands.js";
 import { decodeStemFile, monoFromBuffer } from "./audio/decode.js";
 import { analyzeInWorker } from "./audio/analyzeInWorker.js";
 import { exportAll } from "./audio/exportAll.js";
 import { useEngine } from "./ui/useEngine.js";
 import DropZone from "./ui/DropZone.jsx";
-import StemRow from "./ui/StemRow.jsx";
-import KnobPanel from "./ui/KnobPanel.jsx";
-import WeightMatrix from "./ui/WeightMatrix.jsx";
+import StemCard from "./ui/StemCard.jsx";
+import MacroKnobs from "./ui/MacroKnobs.jsx";
+import AdvancedPanel from "./ui/AdvancedPanel.jsx";
+import MatrixView from "./ui/MatrixView.jsx";
 import Transport from "./ui/Transport.jsx";
-import ExportPanel from "./ui/ExportPanel.jsx";
+import ExportModal from "./ui/ExportModal.jsx";
+
+const TABS = [
+  ["mix", "Mix"],
+  ["advanced", "Advanced"],
+  ["matrix", "Matrix"],
+];
+
+const BYTES_PER_SAMPLE = 4;
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { stems, knobs, pairById, sessionRate, mixBypass, exportState } = state;
+  const [tab, setTab] = useState("mix");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [trimMix, setTrimMix] = useState(true);
 
   const sessionRateRef = useRef(sessionRate);
   useEffect(() => {
@@ -68,8 +81,7 @@ export default function App() {
 
   const reanalyze = useCallback(() => {
     for (const s of stems) {
-      if (s.status !== "ready" && s.status !== "error") continue;
-      if (!s.buffer) continue;
+      if ((s.status !== "ready" && s.status !== "error") || !s.buffer) continue;
       dispatch({ type: "STEM_REANALYZING", id: s.id });
       analyze(s.id, s.buffer, s.sampleRate);
     }
@@ -79,13 +91,13 @@ export default function App() {
 
   const analyses = useMemo(() => stems.map((s) => (s.status === "ready" ? s.analysis : null)), [stems]);
   const perTrack = useMemo(
-    () => stems.map((s) => ({ alpha: s.alpha, beta: s.beta, rowScale: s.rowScale, colScale: s.colScale, mask: s.mask, enabled: s.enabled })),
+    () => stems.map((s) => ({ level: s.level, scoop: s.scoop, rowScale: s.rowScale, colScale: s.colScale, mask: s.mask, enabled: s.enabled })),
     [stems]
   );
   const faderDb = useMemo(() => stems.map((s) => s.faderDb), [stems]);
   const modelKnobs = useMemo(() => ({ ...knobs, pair: pairArray(stems, pairById) }), [knobs, stems, pairById]);
   const curves = useMemo(() => deriveCurves(analyses, faderDb, perTrack, modelKnobs), [analyses, faderDb, perTrack, modelKnobs]);
-  const timelines = useMemo(() => buildGainTimelines(curves, analyses, modelKnobs), [curves, analyses, modelKnobs]);
+  const timelines = useMemo(() => buildGainTimelines(curves, analyses, modelKnobs, perTrack), [curves, analyses, modelKnobs, perTrack]);
   const muted = useMemo(() => effectiveMuted(stems), [stems]);
   const readyStems = useMemo(() => stems.filter((s) => s.status === "ready"), [stems]);
   const specs = useMemo(
@@ -105,8 +117,21 @@ export default function App() {
   );
 
   const engine = useEngine({ readyStems, sessionRate, specs });
-  const [trimMix, setTrimMix] = useState(true);
   const allReady = stems.length > 0 && stems.every((s) => s.status === "ready");
+
+  // Instantaneous gated cut per stem while playing, for the plot overlay.
+  const liveG = useMemo(() => {
+    if (!engine.playing || !knobs.gateEnabled) return null;
+    return timelines.map((tl) => {
+      const out = new Float64Array(NUM_BANDS);
+      let any = false;
+      for (let b = 0; b < NUM_BANDS; b++) {
+        out[b] = tl.bands[b].length ? timelineValueAt(tl.bands[b], tl.initial[b], engine.position) : tl.static[b];
+        if (tl.bands[b].length) any = true;
+      }
+      return any ? out : null;
+    });
+  }, [engine.playing, engine.position, knobs.gateEnabled, timelines]);
 
   const onExport = useCallback(async () => {
     dispatch({ type: "EXPORT_STATE", patch: { status: "running", progress: null, files: [], error: null } });
@@ -127,45 +152,73 @@ export default function App() {
     }
   }, [stems, curves, timelines, modelKnobs, sessionRate, trimMix]);
 
-  // Debug handle for smoke tests and poking around in the console.
+  const memoryMb = stems.reduce((acc, s) => acc + (s.length || 0) * (s.channels || 0) * BYTES_PER_SAMPLE, 0) / 1048576;
+
   useEffect(() => {
-    window.__magicEq = { state, curves, timelines, specs, dispatch };
+    window.__magicEq = { state, curves, timelines, specs, dispatch, setTab };
   });
 
+  const cards = (advanced) =>
+    stems.map((s, i) => (
+      <StemCard
+        key={s.id}
+        stem={s}
+        index={i}
+        curves={curves}
+        liveG={liveG?.[i] ?? null}
+        muted={muted[i]}
+        knobs={knobs}
+        dispatch={dispatch}
+        advanced={advanced}
+        position={engine.playing ? engine.position : null}
+        needsReanalysis={!!s.analysis && s.analysis.gate.thresholdDb !== knobs.gateDb}
+        onRemove={() => dispatch({ type: "REMOVE_STEM", id: s.id })}
+      />
+    ));
+
   return (
-    <main className="app">
-      <header className="topbar">
-        <h1>Magic EQ</h1>
-        <span className="hint">{sessionRate ? `session ${sessionRate} Hz` : "no stems loaded"}</span>
-        <span className="spacer" />
-        <DropZone compact onFiles={addFiles} />
-      </header>
-
-      <Transport engine={engine} canPlay={readyStems.length > 0} mixBypass={mixBypass} onMixBypass={(v) => dispatch({ type: "SET_MIX_BYPASS", value: v })} masking={readyStems.length > 1 ? curves.masking : null} />
-
-      <div className="columns">
-        <div className="stems">
-          {stems.length === 0 ? <DropZone onFiles={addFiles} /> : null}
-          {stems.map((s, i) => (
-            <StemRow
-              key={s.id}
-              stem={s}
-              index={i}
-              curves={curves}
-              muted={muted[i]}
-              knobs={knobs}
-              dispatch={dispatch}
-              needsReanalysis={!!s.analysis && s.analysis.gate.thresholdDb !== knobs.gateDb}
-              onRemove={() => dispatch({ type: "REMOVE_STEM", id: s.id })}
-            />
-          ))}
-        </div>
-        <aside className="side">
-          <KnobPanel knobs={knobs} dispatch={dispatch} onReanalyze={reanalyze} needsReanalysis={needsReanalysis} />
-          <WeightMatrix stems={stems} pairById={pairById} dispatch={dispatch} />
-          <ExportPanel exportState={exportState} canExport={allReady} onExport={onExport} trimMix={trimMix} onTrimMix={setTrimMix} />
-        </aside>
+    <div className="app">
+      <div className="header">
+        <nav className="nav">
+          <h1>Magic EQ</h1>
+          <div className="tabs" role="tablist">
+            {TABS.map(([key, label]) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key} className={`tab${tab === key ? " on" : ""}`} onClick={() => setTab(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="hint">
+            {sessionRate ? `session ${sessionRate} Hz` : "no stems loaded"}
+            {memoryMb > 0 ? ` · ${memoryMb >= 1024 ? `${(memoryMb / 1024).toFixed(1)} GB` : `${memoryMb.toFixed(0)} MB`} in memory` : ""}
+            {memoryMb > 1024 ? " (large sessions may exhaust the tab)" : ""}
+          </span>
+          <span className="spacer" />
+          <DropZone compact label="Import" onFiles={addFiles} />
+          <button type="button" className="primary" disabled={stems.length === 0} onClick={() => setExportOpen(true)}>
+            Export
+          </button>
+        </nav>
+        <Transport engine={engine} canPlay={readyStems.length > 0} mixBypass={mixBypass} onMixBypass={(v) => dispatch({ type: "SET_MIX_BYPASS", value: v })} masking={readyStems.length > 1 ? curves.masking : null} />
+        {tab === "mix" ? <MacroKnobs knobs={knobs} dispatch={dispatch} /> : null}
       </div>
-    </main>
+
+      <main className={`view view-${tab}`}>
+        {stems.length === 0 ? <DropZone onFiles={addFiles} /> : null}
+        {tab === "mix" ? <div className="stems">{cards(false)}</div> : null}
+        {tab === "advanced" ? (
+          <div className="columns">
+            <div className="stems">{cards(true)}</div>
+            <aside className="side">
+              <MacroKnobs knobs={knobs} dispatch={dispatch} />
+              <AdvancedPanel knobs={knobs} dispatch={dispatch} onReanalyze={reanalyze} needsReanalysis={needsReanalysis} />
+            </aside>
+          </div>
+        ) : null}
+        {tab === "matrix" ? <MatrixView stems={stems} curves={curves} pairById={pairById} dispatch={dispatch} /> : null}
+      </main>
+
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} exportState={exportState} canExport={allReady} onExport={onExport} trimMix={trimMix} onTrimMix={setTrimMix} stemCount={stems.length} />
+    </div>
   );
 }

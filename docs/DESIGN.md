@@ -299,3 +299,45 @@ Decisions made while building that refine section 3:
   the rendered RMS and applies the residual, recording both in the recipe.
 - **Export** ignores solo/mute, renders stems at source level (fader 0) and the
   mix at fader level, and optionally trims the mix to -1 dBFS if it clips.
+
+## 10. v2: contrast-normalised, dB-denominated model
+
+Testing v1 on a real ten-stem session showed the model collapsing: up to
+nine sources each added a dominance-weighted cut to every band, the stacked
+sum hit the ceiling almost everywhere, and a uniform cut followed by make-up
+gain is identity. The self terms were in "fraction of spectral depth" units
+and saturated the same ceiling. Only a narrow region of parameter space did
+anything, which is exactly what the user reported.
+
+The v2 model (implemented in `src/dsp/model.js`) keeps the idea and changes
+the parametrisation so every depth knob is a contrast in dB:
+
+```
+audible_i   = { b : S_i(b) >= floorDb }                     floorDb default -24
+silent_i    = { b : S_i(b) <  -60 }                         no cuts, no gate events
+
+level_i(b)  = -Level * mul_i * clip((S_i(b) - T) / (-T), 0, 1)
+scoop_i(b)  = -Scoop * mul_i * clip((E_i(b) - S_i(b)) / scoopRange, 0, 1)
+
+w_ij        = rowScale_j * pair[j][i]                        source-side weight
+D_ij(b)     = clip(A_j(b) - A_i(b) + H, 0, D) / D,   H = (1 - Selectivity) * D
+frac_i(b)   = max_j w_ij D_ij(b)        (or power sum of the others, or mean)
+m_i         = min over audible_i of frac_i                   the flat part
+con_i(b)    = max(0, frac_i(b) - m_i) * masks                masks after the min
+cross_i(b)  = -Unmask * colScale_i * con_i(b)
+G_i(b)      = softclamp(level + scoop + cross, Ceiling)     linear to 75%, tanh knee
+```
+
+Why max: a weighted mean dilutes the cut whenever a stem that competes
+nowhere is added, and dividing by summed weights cancels the per-stem
+scalars. With max, adding a stem that dominates nowhere changes nothing and
+N = 2 reduces to the pairwise model. On the real stems the power-sum variant
+collapses several stems back to flat.
+
+The gated path (`src/dsp/timeline.js`) runs the same `combineCross` and
+`finishGain` with the gated source state and the static all-on `m_i`, so a cut
+can only shrink when a source drops out.
+
+Readouts: *effect* (max minus min of the cut over the audible range), *flat
+removed* (Unmask × colScale × m_i), bands at the ceiling, and the pairwise
+dominance that colours the matrix.

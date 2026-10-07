@@ -14,7 +14,7 @@ describe("integration: synth stems through analysis, model, timeline, recipe", (
   // The pad enters at 1.5 s so the gate has something to do.
   const padLate = concat(silence(sr, 1.5), pad.subarray(0, sr * 1.5));
   const analyses = [bass, guitar, padLate].map((x) => analyzeStem(x, sr));
-  const knobs = knobDefaults({ W: 3, T: -12, H: 6, D: 12, maxCut: 4, stackNorm: 0, floorDb: -40 });
+  const knobs = knobDefaults({ carveDb: 3, levelDb: 0, scoopDb: 0, focus: 0.5, D: 12, maxCut: 4, floorDb: -24 });
   const perTrack = [perTrackDefaults(), perTrackDefaults(), perTrackDefaults()];
   const faders = [0, 0, -20];
   const curves = deriveCurves(analyses, faders, perTrack, knobs);
@@ -36,9 +36,9 @@ describe("integration: synth stems through analysis, model, timeline, recipe", (
     expect(curves.G[BASS][7]).toBeLessThan(-2.5);
     for (let b = 2; b <= 4; b++) expect(Math.abs(curves.G[BASS][b])).toBeLessThan(0.1);
     // The -20 dB pad carves nothing out of the bass's or guitar's main bands.
-    for (let b = 2; b <= 4; b++) expect(curves.cross[BASS][PAD][b]).toBe(0);
-    for (let b = 6; b <= 10; b++) expect(curves.cross[GTR][PAD][b]).toBe(0);
-    expect(curves.G[PAD][6]).toBeCloseTo(-4, 1);
+    for (let b = 2; b <= 4; b++) expect(curves.dom[BASS][PAD][b]).toBe(0);
+    for (let b = 6; b <= 10; b++) expect(curves.dom[GTR][PAD][b]).toBe(0);
+    expect(curves.G[PAD][6]).toBeCloseTo(-3, 1);
     for (let i = 0; i < 3; i++) for (let b = 0; b < NUM_BANDS; b++) {
       expect(curves.G[i][b]).toBeLessThanOrEqual(0);
       expect(curves.G[i][b]).toBeGreaterThanOrEqual(-4);
@@ -47,7 +47,7 @@ describe("integration: synth stems through analysis, model, timeline, recipe", (
   });
 
   it("builds timelines and a recipe", () => {
-    const timelines = buildGainTimelines(curves, analyses, knobs);
+    const timelines = buildGainTimelines(curves, analyses, knobs, perTrack);
     // Pad cuts on the pad come from bass and guitar which play from t = 0, so
     // the pad's own timeline has no events; nobody is cut by the pad.
     expect(timelines[PAD].bands.every((e) => e.length === 0)).toBe(true);
@@ -55,7 +55,7 @@ describe("integration: synth stems through analysis, model, timeline, recipe", (
       stems: [{ name: "bass", analysis: analyses[BASS] }, { name: "guitar", analysis: analyses[GTR] }, { name: "pad", analysis: analyses[PAD] }],
       curves, timelines, knobs, sampleRate: sr,
     });
-    expect(recipe.version).toBe(1);
+    expect(recipe.version).toBe(2);
     expect(recipe.bands.length).toBe(16);
     expect(recipe.stems[GTR].gains[3]).toBeLessThan(-2.5);
     expect(recipe.stems[PAD].faderDb).toBe(-20);

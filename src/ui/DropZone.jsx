@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-export default function DropZone({ onFiles, compact }) {
+export default function DropZone({ onFiles, compact, label }) {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
   const accept = (list) => {
@@ -36,7 +36,7 @@ export default function DropZone({ onFiles, compact }) {
           e.target.value = "";
         }}
       />
-      {compact ? "Add stems" : "Drop stems here (WAV preferred), or click to choose files"}
+      {compact ? label || "Import" : "Drop stems here (WAV preferred), or click to choose files"}
     </div>
   );
 }

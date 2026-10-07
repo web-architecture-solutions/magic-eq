@@ -1,16 +1,28 @@
 import { NUM_BANDS, ones } from "./bands.js";
 
-// The whole idea lives here: every EQ curve is a pure function of the stems'
-// spectra, their faders, and a small set of knobs. Nothing is stored.
+// Every EQ curve is a pure function of the stems' spectra, their faders and a
+// small set of knobs. Nothing is stored.
+//
+// v2: every depth knob is a contrast in dB. The flat part of a stem's cross
+// cut (identical in every audible band) is removed because loudness make-up
+// would cancel it anyway, and sources are combined per band (max by default)
+// so adding a stem that competes nowhere changes nothing.
+
+export const SILENT_DB = -60; // bands this far below the stem's peak get no cuts at all
+export const KNEE = 0.75; // soft ceiling: linear to KNEE * maxCut, then tanh to maxCut
 
 export const DEFAULT_KNOBS = Object.freeze({
-  W: 3, // global cross-cut depth, dB
-  T: -12, // level threshold, dB below the stem's own peak (<= 0)
-  H: 6, // dominance headroom, dB
-  D: 12, // dominance range, dB (full cut once j exceeds i by D - H)
-  maxCut: 6, // clamp, dB
-  stackNorm: 0.5, // divide the cross sum by n^stackNorm
-  floorDb: -40, // no cross cuts where the target is below this (rel. own peak)
+  carveDb: 3, // cross-track cut depth (contrast), dB
+  levelDb: 0, // self: damp the stem's own peaks, dB at the peak band
+  scoopDb: 2, // self: cut the valleys between the stem's modes, dB at a full valley
+  focus: 0.5, // 0: cut wherever another stem is comparable; 1: only where it clearly dominates
+  maxCut: 6, // ceiling, dB (soft knee)
+  floorDb: -24, // audible range: bands within this of the stem's peak define its contrast
+  T: -12, // level reach: the level term only touches bands within T dB of the peak (< 0)
+  scoopRange: 12, // scoop reach: a valley this deep (dB) gets the full scoop depth
+  D: 12, // dominance range, dB, over which a cut ramps from 0 to full
+  crossNorm: "max", // "max" | "sum" | "mean": how the other stems combine per band
+  coupled: true, // per-stem level/scoop are multipliers on the global depths (else absolute dB)
   mixMask: ones(),
   pair: null, // [source][target] overrides, null or 1 = no override
   attackTau: 0.15,
@@ -22,10 +34,10 @@ export const DEFAULT_KNOBS = Object.freeze({
 });
 
 export const DEFAULT_PER_TRACK = Object.freeze({
-  alpha: 0, // level: damp the peaks
-  beta: 0, // scoop: cut the valleys between modes
-  rowScale: 1, // how hard this stem carves others
-  colScale: 1, // how much this stem accepts cuts
+  level: 1, // multiplier on levelDb when coupled, else dB
+  scoop: 1, // multiplier on scoopDb when coupled, else dB
+  rowScale: 1, // how hard this stem carves others (source weight)
+  colScale: 1, // how much this stem accepts cuts (applied to the depth)
   mask: ones(),
   enabled: true,
 });
@@ -42,86 +54,221 @@ function clip(x, lo, hi) {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
+export function headroomFor(knobs) {
+  return (1 - clip(knobs.focus ?? 0.5, 0, 1)) * knobs.D;
+}
+
+// Source-side weight: how hard source j carves target i.
 export function pairWeight(knobs, perTrack, source, target) {
   const override = knobs.pair?.[source]?.[target];
   const p = override == null ? 1 : override;
-  return knobs.W * perTrack[source].rowScale * perTrack[target].colScale * p;
+  return (perTrack[source].rowScale ?? 1) * p;
 }
 
 export function effectiveFaders(faderDb, knobs) {
   return faderDb.map((f) => (knobs.postFader ? 0 : f || 0));
 }
 
+// Soft ceiling for a cut u <= 0: linear until KNEE * M, then a tanh knee that
+// asymptotes to M. Monotone, C1 at the knee, so turning a knob always moves it.
+export function softClamp(u, M) {
+  if (!(M > 0)) return 0;
+  const x = -u;
+  if (!(x > 0)) return 0;
+  const k = KNEE * M;
+  if (x <= k) return -x;
+  return -(k + (M - k) * Math.tanh((x - k) / (M - k)));
+}
+
+// Fraction of "the others" dominating stem i in band b, given which sources
+// are active. ctx comes from deriveCurves.
+export function combineCross(ctx, i, b, state) {
+  const { dom, weights, absDb, live, knobs } = ctx;
+  const N = dom.length;
+  const mode = knobs.crossNorm || "max";
+  if (mode === "sum") {
+    let p = 0;
+    for (let j = 0; j < N; j++) {
+      if (j === i || !live[j] || !state[j] || weights[i][j] <= 0) continue;
+      if (ctx.S[j][b] < SILENT_DB) continue;
+      p += weights[i][j] * Math.pow(10, absDb[j][b] / 10);
+    }
+    if (p <= 0) return 0;
+    return clip(10 * Math.log10(p) - absDb[i][b] + ctx.H, 0, knobs.D) / knobs.D;
+  }
+  let acc = 0;
+  let count = 0;
+  for (let j = 0; j < N; j++) {
+    if (j === i || !live[j]) continue;
+    count++;
+    if (!state[j]) continue;
+    const v = dom[i][j][b];
+    if (mode === "max") {
+      if (v > acc) acc = v;
+    } else {
+      acc += v;
+    }
+  }
+  return mode === "mean" && count > 0 ? acc / count : acc;
+}
+
+// Self term plus contrast-normalised cross term, through the soft ceiling.
+export function finishGain(selfB, frac, mI, maskB, colScale, knobs) {
+  const cross = -knobs.carveDb * colScale * maskB * Math.max(0, frac - mI);
+  return softClamp(selfB + cross, knobs.maxCut);
+}
+
 export function deriveCurves(analyses, faderDb, perTrack, knobs) {
   const N = analyses.length;
   const faders = effectiveFaders(faderDb, knobs);
-  const live = analyses.map(
-    (a, i) => !!a && !a.empty && perTrack[i].enabled !== false
-  );
+  const live = analyses.map((a, i) => !!a && !a.empty && perTrack[i].enabled !== false);
+  const H = headroomFor(knobs);
+  const T = Math.min(-1, knobs.T);
+  const scoopRange = Math.max(1, knobs.scoopRange);
+
+  const S = analyses.map((a) => (a ? a.S : new Float64Array(NUM_BANDS).fill(-200)));
+  const absDb = analyses.map((a, i) => {
+    const out = new Float64Array(NUM_BANDS).fill(-200);
+    if (live[i]) for (let b = 0; b < NUM_BANDS; b++) out[b] = a.bandDb[b] + faders[i];
+    return out;
+  });
+  const weights = [];
+  for (let i = 0; i < N; i++) {
+    weights.push(new Float64Array(N));
+    for (let j = 0; j < N; j++) if (j !== i) weights[i][j] = pairWeight(knobs, perTrack, j, i);
+  }
 
   const self = [];
-  const cross = [];
-  const nContrib = [];
+  const dom = [];
+  const frac = [];
+  const crossMin = new Float64Array(N);
+  const flatRemovedDb = new Float64Array(N);
+  const maskProd = [];
   const G = [];
-  const unclampedSum = [];
+  const unclamped = [];
   const makeupDb = new Float64Array(N);
+  const effect = new Float64Array(N);
+  const ceilingBands = new Uint8Array(N);
+  const pairContribution = [];
+  const audible = [];
+
+  const ctx = { dom, weights, absDb, live, knobs, S, H };
+  const allOn = new Uint8Array(N).fill(1);
 
   for (let i = 0; i < N; i++) {
     const s = new Float64Array(NUM_BANDS);
-    const ci = [];
-    const n = new Uint8Array(NUM_BANDS);
+    const di = [];
+    const fr = new Float64Array(NUM_BANDS);
+    const mp = new Float64Array(NUM_BANDS);
     const g = new Float64Array(NUM_BANDS);
     const u = new Float64Array(NUM_BANDS);
+    const aud = new Uint8Array(NUM_BANDS);
     self.push(s);
-    cross.push(ci);
-    nContrib.push(n);
+    dom.push(di);
+    frac.push(fr);
+    maskProd.push(mp);
     G.push(g);
-    unclampedSum.push(u);
-    for (let j = 0; j < N; j++) ci.push(new Float64Array(NUM_BANDS));
+    unclamped.push(u);
+    audible.push(aud);
+    pairContribution.push(new Float64Array(N));
+    for (let j = 0; j < N; j++) di.push(new Float64Array(NUM_BANDS));
     if (!live[i]) continue;
 
     const a = analyses[i];
     const pt = perTrack[i];
     const mask = pt.mask || ones();
-    for (let b = 0; b < NUM_BANDS; b++) {
-      const level = Math.max(0, a.S[b] - knobs.T);
-      const valley = a.E[b] - a.S[b];
-      s[b] = -(pt.alpha || 0) * level - (pt.beta || 0) * valley + 0;
-    }
+    const levelDepth = knobs.coupled ? knobs.levelDb * (pt.level ?? 1) : (pt.level ?? 0);
+    const scoopDepth = knobs.coupled ? knobs.scoopDb * (pt.scoop ?? 1) : (pt.scoop ?? 0);
 
+    for (let b = 0; b < NUM_BANDS; b++) {
+      mp[b] = (knobs.mixMask?.[b] ?? 1) * (mask[b] ?? 1);
+      if (a.S[b] < SILENT_DB) continue;
+      aud[b] = a.S[b] >= knobs.floorDb ? 1 : 0;
+      const lv = clip((a.S[b] - T) / -T, 0, 1);
+      const sc = clip((a.E[b] - a.S[b]) / scoopRange, 0, 1);
+      s[b] = -levelDepth * lv - scoopDepth * sc + 0;
+    }
+  }
+
+  // Pairwise dominance needs every stem's absDb, so it is a second pass.
+  for (let i = 0; i < N; i++) {
+    if (!live[i]) continue;
     for (let j = 0; j < N; j++) {
-      if (j === i || !live[j]) continue;
-      const w = pairWeight(knobs, perTrack, j, i);
-      if (w === 0) continue;
-      const aj = analyses[j];
-      const cij = ci[j];
+      if (j === i || !live[j] || weights[i][j] <= 0) continue;
+      const dij = dom[i][j];
       for (let b = 0; b < NUM_BANDS; b++) {
-        if (a.S[b] < knobs.floorDb) continue;
-        const Ai = a.bandDb[b] + faders[i];
-        const Aj = aj.bandDb[b] + faders[j];
-        const dom = clip(Aj - Ai + knobs.H, 0, knobs.D) / knobs.D;
-        if (dom <= 0) continue;
-        const v = -w * dom * (knobs.mixMask?.[b] ?? 1) * (mask[b] ?? 1);
-        if (v === 0) continue;
-        cij[b] = v;
-        n[b]++;
+        if (S[i][b] < SILENT_DB || S[j][b] < SILENT_DB) continue;
+        dij[b] = weights[i][j] * (clip(absDb[j][b] - absDb[i][b] + H, 0, knobs.D) / knobs.D);
       }
     }
+  }
 
+  for (let i = 0; i < N; i++) {
+    if (!live[i]) continue;
+    const a = analyses[i];
+    const pt = perTrack[i];
+    const fr = frac[i];
+    let m = Infinity;
+    let nAud = 0;
     for (let b = 0; b < NUM_BANDS; b++) {
-      let sum = 0;
-      for (let j = 0; j < N; j++) sum += ci[j][b];
-      const norm = n[b] > 0 ? Math.pow(n[b], knobs.stackNorm) : 1;
-      u[b] = s[b] + sum / norm + 0;
-      g[b] = clip(u[b], -knobs.maxCut, 0) + 0;
+      if (a.S[b] < SILENT_DB) continue;
+      fr[b] = combineCross(ctx, i, b, allOn);
+      if (audible[i][b]) {
+        nAud++;
+        if (fr[b] < m) m = fr[b];
+      }
     }
+    if (!Number.isFinite(m)) m = 0;
+    crossMin[i] = m;
+    flatRemovedDb[i] = knobs.carveDb * (pt.colScale ?? 1) * m;
 
-    makeupDb[i] = knobs.loudnessMatch ? estimateMakeup(a.bandPower, g) : 0;
+    let gMax = -Infinity;
+    let gMin = Infinity;
+    for (let b = 0; b < NUM_BANDS; b++) {
+      if (a.S[b] < SILENT_DB) continue;
+      const cross = -knobs.carveDb * (pt.colScale ?? 1) * maskProd[i][b] * Math.max(0, fr[b] - m);
+      unclamped[i][b] = self[i][b] + cross + 0;
+      G[i][b] = softClamp(unclamped[i][b], knobs.maxCut) + 0;
+      if (audible[i][b]) {
+        if (G[i][b] > gMax) gMax = G[i][b];
+        if (G[i][b] < gMin) gMin = G[i][b];
+        if (unclamped[i][b] < -KNEE * knobs.maxCut) ceilingBands[i]++;
+      }
+    }
+    effect[i] = nAud > 0 ? gMax - gMin : 0;
+    for (let j = 0; j < N; j++) {
+      if (j === i || !live[j]) continue;
+      let acc = 0;
+      for (let b = 0; b < NUM_BANDS; b++) if (audible[i][b]) acc += dom[i][j][b];
+      pairContribution[i][j] = nAud > 0 ? acc / nAud : 0;
+    }
+    makeupDb[i] = knobs.loudnessMatch ? estimateMakeup(a.bandPower, G[i]) : 0;
   }
 
   const masking = maskingScore(analyses, faders, G, makeupDb, live);
 
-  return { self, cross, nContrib, G, unclampedSum, makeupDb, masking, faders };
+  return {
+    self,
+    dom,
+    frac,
+    crossMin,
+    flatRemovedDb,
+    maskProd,
+    weights,
+    absDb,
+    S,
+    live,
+    H,
+    audible,
+    G,
+    unclamped,
+    makeupDb,
+    effect,
+    ceilingBands,
+    pairContribution,
+    masking,
+    faders,
+  };
 }
 
 // Gain (dB) that restores the stem's band-weighted power after the cuts.

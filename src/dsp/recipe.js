@@ -6,7 +6,7 @@ export function buildRecipe({ stems, curves, timelines, knobs, sampleRate, measu
   const c = bandCentres();
   const round = (x, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
   return {
-    version: 1,
+    version: 2,
     sampleRate,
     bandQ: round(BAND_Q, 3),
     bands: Array.from({ length: NUM_BANDS }, (_, b) => ({

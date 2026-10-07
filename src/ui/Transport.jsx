@@ -34,7 +34,7 @@ export default function Transport({ engine, canPlay, mixBypass, onMixBypass, mas
         Bypass all
       </button>
       {masking ? (
-        <span className="masking" title="Sum over pairs and bands of the overlapping power, before and after">
+        <span className="masking" title="Crude masking score: sum over stem pairs and bands of the overlapping power after the cuts, relative to before. More negative is less overlap.">
           overlap {masking.ratioDb.toFixed(2)} dB
         </span>
       ) : null}
