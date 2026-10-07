@@ -2,6 +2,8 @@ import { renderStem, renderMix, rmsDbOfBuffer } from "./render.js";
 import { encodeWav24 } from "../dsp/wav.js";
 import { buildRecipe } from "../dsp/recipe.js";
 import { dbToGain } from "./context.js";
+import { monoFromBuffer } from "./decode.js";
+import { erbFrameEnergies, smrReport } from "../dsp/metrics.js";
 
 const TRIM_TARGET = Math.pow(10, -1 / 20); // -1 dBFS
 
@@ -22,11 +24,12 @@ function baseName(name) {
 
 // Renders every stem and the mix, encodes 24-bit WAVs, and builds the recipe.
 // specs[i] = { faderDb, makeupDb, gains }, timelines[i] from buildGainTimelines.
-export async function exportAll({ stems, specs, timelines, curves, knobs, sampleRate, trimMix = true, onProgress }) {
+export async function exportAll({ stems, specs, timelines, curves, knobs, sampleRate, trimMix = true, evaluate = true, onProgress }) {
   const files = [];
   const measuredMakeupDb = [];
   const processed = [];
-  const total = stems.length + 2;
+  const renderedErb = [];
+  const total = stems.length + 2 + (evaluate ? 1 : 0);
   let done = 0;
   const report = (label) => onProgress?.({ done, total, label });
 
@@ -42,6 +45,13 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
     const residual = knobs.loudnessMatch && Number.isFinite(before) && Number.isFinite(after) ? before - after : 0;
     measuredMakeupDb.push((specs[i].makeupDb || 0) + residual);
     const chans = channelsOf(rendered, dbToGain(residual));
+    if (evaluate) {
+      report(`Scoring ${s.name}`);
+      await new Promise((r) => setTimeout(r, 0));
+      const mono = chans.length === 1 ? chans[0] : monoFromBuffer(rendered);
+      if (chans.length !== 1) for (let k = 0; k < mono.length; k++) mono[k] *= dbToGain(residual);
+      renderedErb.push(erbFrameEnergies(mono, rendered.sampleRate, { nfft: s.analysis?.nfft, hop: s.analysis?.hop }));
+    }
     const { arrayBuffer, clippedSamples } = encodeWav24(chans, rendered.sampleRate);
     files.push({
       name: `${baseName(s.name)}.eq.wav`,
@@ -77,7 +87,23 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
   done++;
   report();
 
+  let evaluation = null;
+  if (evaluate) {
+    report("Scoring the session");
+    await new Promise((r) => setTimeout(r, 0));
+    const before = smrReport(stems.map((s, i) => ({ energies: s.analysis.erb.energies, numFrames: s.analysis.numFrames, active: s.analysis.active, faderDb: curves.faders[i], makeupDb: 0, gains16: null })));
+    const after = smrReport(stems.map((s, i) => ({ energies: renderedErb[i].energies, numFrames: renderedErb[i].numFrames, active: s.analysis.active, faderDb: curves.faders[i], makeupDb: 0, gains16: null })));
+    evaluation = {
+      total: { maskedBefore: before.total.maskedFraction, maskedAfter: after.total.maskedFraction, smrBefore: before.total.meanSmrDb, smrAfter: after.total.meanSmrDb },
+      stems: stems.map((s, i) => ({ name: s.name, maskedBefore: before.stems[i].maskedFraction, maskedAfter: after.stems[i].maskedFraction, smrBefore: before.stems[i].meanSmrDb, smrAfter: after.stems[i].meanSmrDb })),
+      thresholdDb: before.thresholdDb,
+    };
+    done++;
+    report();
+  }
+
   const recipe = buildRecipe({ stems, curves, timelines, knobs, sampleRate, measuredMakeupDb });
+  if (evaluation) recipe.evaluation = evaluation;
   files.push({
     name: "recipe.json",
     blob: new Blob([JSON.stringify(recipe, null, 2)], { type: "application/json" }),
@@ -86,7 +112,7 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
   });
   done++;
   report("Done");
-  return { files, recipe };
+  return { files, recipe, evaluation };
 }
 
 export function downloadBlob(blob, name) {

@@ -45,11 +45,18 @@ sample rate; later stems at a different rate are resampled to it on load.
    following) at its source level, the mix at fader level, and `recipe.json`
    holds the per-band gains, the gate transitions, and the sparse automation.
 
-Three views: **Mix** has the five knobs that matter and a card per stem.
+Four views: **Mix** has the five knobs that matter and a card per stem.
 **Advanced** adds per-stem multipliers, band locks, the full model knobs, the
 gate settings, and a description of every control. **Matrix** shows who carves
 whom (colour) with the editable per-pair weights and the row/column scalars.
-Hover any control for what it does and what it interacts with.
+**Listen** is a blind, loudness-matched comparison over a loop, with external
+renders of the same stems as extra conditions. Hover any control for what it
+does and what it interacts with.
+
+Export also reports an objective masking measure (ERB-band signal-to-masker
+ratio) on the rendered audio, before and after. `docs/EVALUATION.md` explains
+it and has results on real stems; `scripts/evaluate.mjs` runs it from the
+command line over any folder of stems.
 
 ## Knobs
 
@@ -70,7 +77,9 @@ leads and vocals), and a 16-band *band lock*.
 
 Advanced model knobs: *Dominance range* (D), *Audible range*, *Flatten reach*
 (T), *Scoop reach*, *Combine others* (max / sum / mean), *Couple stem knobs*,
-*Mix band lock*; and *Follow activity* with attack, release and threshold.
+*Psychoacoustic weighting* (A-weighting plus upward spread of masking across
+the bands, off by default), *Mix band lock*; and *Follow activity* with
+attack, release and threshold.
 
 Flatten and Scoop oppose each other (one cuts peaks, the other cuts valleys);
 equal amounts of both tend toward a flat cut that make-up cancels.
@@ -79,13 +88,13 @@ equal amounts of both tend toward a flat cut that make-up cancels.
 
 ```
 src/dsp/      pure DSP, no DOM: bands, fft, gate, envelope, analyze, model,
-              timeline, wav, recipe
+              timeline, metrics, wav, recipe
 src/audio/    Web Audio: decode, analysis worker, shared live/offline chain
               (graph.js), live engine, offline render, export
 src/ui/       React components and the engine hook
 src/state/    reducer and selectors
 test/         vitest over src/dsp with synthetic stems
-scripts/      fixture generator
+scripts/      fixture generator, evaluation CLI
 ```
 
 `src/ui/params.js` is the single dictionary behind every label and tooltip.

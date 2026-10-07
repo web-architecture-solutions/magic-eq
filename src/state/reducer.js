@@ -9,7 +9,7 @@ export const initialState = {
   pairById: {}, // { [sourceId]: { [targetId]: weight } }
   sessionRate: null,
   mixBypass: false,
-  exportState: { status: "idle", progress: null, files: [], error: null },
+  exportState: { status: "idle", progress: null, files: [], error: null, evaluation: null },
 };
 
 export function newStem(name) {

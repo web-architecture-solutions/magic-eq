@@ -14,11 +14,13 @@ import AdvancedPanel from "./ui/AdvancedPanel.jsx";
 import MatrixView from "./ui/MatrixView.jsx";
 import Transport from "./ui/Transport.jsx";
 import ExportModal from "./ui/ExportModal.jsx";
+import ListeningTest from "./ui/ListeningTest.jsx";
 
 const TABS = [
   ["mix", "Mix"],
   ["advanced", "Advanced"],
   ["matrix", "Matrix"],
+  ["listen", "Listen"],
 ];
 
 const BYTES_PER_SAMPLE = 4;
@@ -134,9 +136,9 @@ export default function App() {
   }, [engine.playing, engine.position, knobs.gateEnabled, timelines]);
 
   const onExport = useCallback(async () => {
-    dispatch({ type: "EXPORT_STATE", patch: { status: "running", progress: null, files: [], error: null } });
+    dispatch({ type: "EXPORT_STATE", patch: { status: "running", progress: null, files: [], error: null, evaluation: null } });
     try {
-      const { files } = await exportAll({
+      const { files, evaluation } = await exportAll({
         stems,
         specs: stems.map((s, i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i] })),
         timelines,
@@ -146,7 +148,7 @@ export default function App() {
         trimMix,
         onProgress: (progress) => dispatch({ type: "EXPORT_STATE", patch: { progress } }),
       });
-      dispatch({ type: "EXPORT_STATE", patch: { status: "done", files } });
+      dispatch({ type: "EXPORT_STATE", patch: { status: "done", files, evaluation } });
     } catch (err) {
       dispatch({ type: "EXPORT_STATE", patch: { status: "error", error: err?.message || String(err) } });
     }
@@ -216,6 +218,9 @@ export default function App() {
           </div>
         ) : null}
         {tab === "matrix" ? <MatrixView stems={stems} curves={curves} pairById={pairById} dispatch={dispatch} /> : null}
+        {tab === "listen" ? (
+          <ListeningTest stems={stems} specs={specs} timelines={timelines} curves={curves} sessionRate={sessionRate} knobsLabel={`unmask ${knobs.carveDb} · flatten ${knobs.levelDb} · scoop ${knobs.scoopDb}`} />
+        ) : null}
       </main>
 
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} exportState={exportState} canExport={allReady} onExport={onExport} trimMix={trimMix} onTrimMix={setTrimMix} stemCount={stems.length} />

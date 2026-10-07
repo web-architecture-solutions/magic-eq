@@ -12,6 +12,8 @@ self.onmessage = (e) => {
       analysis.S.buffer,
       analysis.E.buffer,
       analysis.frameRmsDb.buffer,
+      analysis.active.buffer,
+      analysis.erb.energies.buffer,
     ];
     self.postMessage({ type: "done", analysis }, transfer);
   } catch (err) {

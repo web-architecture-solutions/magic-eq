@@ -341,3 +341,24 @@ can only shrink when a source drops out.
 Readouts: *effect* (max minus min of the cut over the audible range), *flat
 removed* (Unmask × colScale × m_i), bands at the ceiling, and the pairwise
 dominance that colours the matrix.
+
+## 11. Where this sits against the field, and how it is measured
+
+Pairwise demaskers (TheMasker, pure:unmask, D·MASK, Soothe in sidechain
+mode) and the newer cross-track group products (Spectral Engine, Spectral
+Agent 2, smart:EQ 4 groups, AutoDeMasker) are all dynamic processors with a
+sidechain pair or a priority hierarchy, most on ERB or Bark excitation
+models. This tool is static (gated-static), symmetric and
+contrast-normalised, works on 16 fixed EQ bands, exports a recipe, and adds
+the mode-aware self terms. It is closest to Hafezi & Reiss (2015): a
+simplified band-energy masking measure, parametric EQ cuts, one user
+parameter. It departs from the literature's "masker = sum of all others"
+framing, which collapses to flat with many stems; the contrast
+normalisation is this tool's addition.
+
+`docs/EVALUATION.md` has the measurement method (ERB signal-to-masker ratio
+with spreading, plus a blind listening page) and the first results on real
+stems. In short: the objective effect of 3 to 6 dB static cuts is under one
+point of masked fraction on a balanced ten-stem mix, because level and
+density dominate the metric. The listening test decides whether that is the
+"subtle but real" of the manual technique or nothing at all.

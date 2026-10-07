@@ -251,3 +251,23 @@ describe("softClamp", () => {
     expect(c.ceilingBands[BASS]).toBe(3);
   });
 });
+
+describe("psychoacoustic weighting", () => {
+  it("is off by default and identical to the plain model", () => {
+    const a = threeStemCase();
+    const b = threeStemCase({ psycho: false });
+    for (let i = 0; i < 3; i++) for (let bb = 0; bb < NUM_BANDS; bb++) expect(b.G[i][bb]).toBe(a.G[i][bb]);
+  });
+
+  it("lets a loud lower band mask the band above it", () => {
+    const masker = spec({ 3: 10 });
+    const target = spec({ 4: 0, 10: 0 });
+    const pt = [perTrackDefaults(), perTrackDefaults()];
+    const plain = deriveCurves([masker, target], [0, 0], pt, knobDefaults(BASE));
+    const psycho = deriveCurves([masker, target], [0, 0], pt, knobDefaults({ ...BASE, psycho: true }));
+    expect(plain.dom[1][0][4]).toBe(0);
+    expect(psycho.dom[1][0][4]).toBeGreaterThan(0);
+    expect(psycho.G[1][4]).toBeLessThan(0);
+    expect(psycho.G[1][10]).toBe(0);
+  });
+});

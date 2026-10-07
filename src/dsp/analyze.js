@@ -2,6 +2,7 @@ import { NUM_BANDS, binRanges } from "./bands.js";
 import { makeSpectrumAnalyser } from "./fft.js";
 import { frameRmsDb, detectGate, numFramesFor } from "./gate.js";
 import { modeEnvelope } from "./envelope.js";
+import { erbBinRanges, accumulateErb, NUM_ERB } from "./metrics.js";
 
 export const DB_FLOOR = -120;
 
@@ -32,13 +33,16 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
 
   const analyser = makeSpectrumAnalyser(nfft);
   const ranges = binRanges(sampleRate, nfft);
+  const erbRanges = erbBinRanges(sampleRate, nfft);
+  const erbEnergies = new Float32Array(numFrames * NUM_ERB);
   const power = new Float64Array(nfft / 2 + 1);
   const acc = new Float64Array(NUM_BANDS);
   let activeFrames = 0;
 
   for (let f = 0; f < numFrames; f++) {
+    analyser.powerSpectrumInto(mono, f * hop, power);
+    accumulateErb(power, erbRanges, erbEnergies, f * NUM_ERB);
     if (gate.active[f]) {
-      analyser.powerSpectrumInto(mono, f * hop, power);
       for (let b = 0; b < NUM_BANDS; b++) {
         const r = ranges[b];
         if (r.empty) continue;
@@ -83,6 +87,8 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
     S,
     E,
     frameRmsDb: rms,
+    active: gate.active,
+    erb: { numBands: NUM_ERB, energies: erbEnergies },
     gate: {
       transitions: gate.transitions,
       activeFraction: gate.activeFraction,

@@ -146,3 +146,23 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 code { background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
 .side .slider { grid-template-columns: 124px 1fr 60px; }
 .side .panel .slider-label { line-height: 1.15; }
+
+.evaluation { margin-top: 10px; }
+.evaluation h3 { font-size: 12px; margin: 8px 0 4px; color: var(--text-secondary); }
+.eval-total { font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+table.eval { border-collapse: collapse; font-size: 11px; width: 100%; }
+table.eval th, table.eval td { border: 1px solid var(--line); padding: 2px 6px; text-align: left; font-variant-numeric: tabular-nums; }
+table.eval th { color: var(--text-secondary); font-weight: normal; }
+
+.listen { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.listen-setup { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+.listen-setup .slider { min-width: 320px; }
+.chip { background: var(--surface-2); border-radius: 12px; padding: 2px 8px; font-size: 12px; }
+.listen-trial { background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+.listen-buttons { display: flex; gap: 8px; margin-bottom: 12px; }
+.listen-buttons .cond { font-size: 18px; padding: 10px 22px; }
+.listen-buttons .cond.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+table.ratings { border-collapse: collapse; width: 100%; }
+table.ratings th, table.ratings td { padding: 4px 8px; border-bottom: 1px solid var(--line); }
+table.ratings td input[type="range"] { width: 70%; vertical-align: middle; }
+.listen-actions { display: flex; gap: 8px; margin-top: 10px; }

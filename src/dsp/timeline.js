@@ -11,7 +11,7 @@ const MIN_DELTA_DB = 0.05;
 // drops out. When gating is off, initial == G and there are no events.
 export function buildGainTimelines(curves, analyses, knobs, perTrack) {
   const N = curves.G.length;
-  const ctx = { dom: curves.dom, weights: curves.weights, absDb: curves.absDb, live: curves.live, knobs, S: curves.S, H: curves.H };
+  const ctx = { dom: curves.dom, weights: curves.weights, absDb: curves.absDb, maskerDb: curves.maskerDb, maskeeDb: curves.maskeeDb, maskerS: curves.maskerS, live: curves.live, knobs, S: curves.S, H: curves.H };
   const mode = knobs.crossNorm || "max";
   const out = [];
   for (let i = 0; i < N; i++) {
@@ -26,7 +26,7 @@ export function buildGainTimelines(curves, analyses, knobs, perTrack) {
       const sources = [];
       for (let j = 0; j < N; j++) {
         if (j === i || !curves.live[j]) continue;
-        const relevant = mode === "sum" ? curves.weights[i][j] > 0 && curves.S[j][b] >= SILENT_DB : curves.dom[i][j][b] > 0;
+        const relevant = mode === "sum" ? curves.weights[i][j] > 0 && (curves.maskerS || curves.S)[j][b] >= SILENT_DB : curves.dom[i][j][b] > 0;
         if (relevant) sources.push(j);
       }
       if (sources.length === 0) continue;

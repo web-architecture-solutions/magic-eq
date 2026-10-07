@@ -1,4 +1,4 @@
-import { NUM_BANDS, ones } from "./bands.js";
+import { NUM_BANDS, ones, bandCentres } from "./bands.js";
 
 // Every EQ curve is a pure function of the stems' spectra, their faders and a
 // small set of knobs. Nothing is stored.
@@ -23,6 +23,7 @@ export const DEFAULT_KNOBS = Object.freeze({
   D: 12, // dominance range, dB, over which a cut ramps from 0 to full
   crossNorm: "max", // "max" | "sum" | "mean": how the other stems combine per band
   coupled: true, // per-stem level/scoop are multipliers on the global depths (else absolute dB)
+  psycho: false, // loudness-weight band levels and spread maskers upward before the dominance test
   mixMask: ones(),
   pair: null, // [source][target] overrides, null or 1 = no override
   attackTau: 0.15,
@@ -54,6 +55,43 @@ function clip(x, lo, hi) {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
+// A-weighting (dB) at a frequency, as a cheap equal-loudness stand-in.
+export function aWeightDb(f) {
+  const f2 = f * f;
+  const ra = (12194 ** 2 * f2 * f2) / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+  return 20 * Math.log10(ra) + 2.0;
+}
+
+// Upward spread of masking across the 16 bands (dB): a masker in band b
+// also counts in b+1 and b+2, and a little in b-1.
+const SPREAD16 = { "-1": -25, 0: 0, 1: -10, 2: -20 };
+
+let aWeightCache = null;
+function aWeights() {
+  if (!aWeightCache) aWeightCache = Float64Array.from(bandCentres(), (f) => aWeightDb(f));
+  return aWeightCache;
+}
+
+// Psychoacoustic view of a stem's absolute band levels: loudness-weighted,
+// and (for its role as a masker) spread upward.
+export function psychoLevels(absDb, asMasker) {
+  const A = aWeights();
+  const w = new Float64Array(NUM_BANDS);
+  for (let b = 0; b < NUM_BANDS; b++) w[b] = absDb[b] + A[b];
+  if (!asMasker) return w;
+  const out = new Float64Array(NUM_BANDS);
+  for (let b = 0; b < NUM_BANDS; b++) {
+    let p = 0;
+    for (const [dStr, k] of Object.entries(SPREAD16)) {
+      const src = b - Number(dStr);
+      if (src < 0 || src >= NUM_BANDS) continue;
+      p += Math.pow(10, (w[src] + k) / 10);
+    }
+    out[b] = p > 0 ? 10 * Math.log10(p) : -200;
+  }
+  return out;
+}
+
 export function headroomFor(knobs) {
   return (1 - clip(knobs.focus ?? 0.5, 0, 1)) * knobs.D;
 }
@@ -83,18 +121,20 @@ export function softClamp(u, M) {
 // Fraction of "the others" dominating stem i in band b, given which sources
 // are active. ctx comes from deriveCurves.
 export function combineCross(ctx, i, b, state) {
-  const { dom, weights, absDb, live, knobs } = ctx;
+  const { dom, weights, live, knobs } = ctx;
+  const maskerDb = ctx.maskerDb || ctx.absDb;
+  const maskeeDb = ctx.maskeeDb || ctx.absDb;
   const N = dom.length;
   const mode = knobs.crossNorm || "max";
   if (mode === "sum") {
     let p = 0;
     for (let j = 0; j < N; j++) {
       if (j === i || !live[j] || !state[j] || weights[i][j] <= 0) continue;
-      if (ctx.S[j][b] < SILENT_DB) continue;
-      p += weights[i][j] * Math.pow(10, absDb[j][b] / 10);
+      if ((ctx.maskerS || ctx.S)[j][b] < SILENT_DB) continue;
+      p += weights[i][j] * Math.pow(10, maskerDb[j][b] / 10);
     }
     if (p <= 0) return 0;
-    return clip(10 * Math.log10(p) - absDb[i][b] + ctx.H, 0, knobs.D) / knobs.D;
+    return clip(10 * Math.log10(p) - maskeeDb[i][b] + ctx.H, 0, knobs.D) / knobs.D;
   }
   let acc = 0;
   let count = 0;
@@ -137,6 +177,16 @@ export function deriveCurves(analyses, faderDb, perTrack, knobs) {
     weights.push(new Float64Array(N));
     for (let j = 0; j < N; j++) if (j !== i) weights[i][j] = pairWeight(knobs, perTrack, j, i);
   }
+  const maskerDb = knobs.psycho ? absDb.map((a, i) => (live[i] ? psychoLevels(a, true) : a)) : absDb;
+  const maskeeDb = knobs.psycho ? absDb.map((a, i) => (live[i] ? psychoLevels(a, false) : a)) : absDb;
+  // A stem's masker view relative to its own peak decides where it is silent
+  // as a masker (identical to S when psycho is off).
+  const maskerS = maskerDb.map((m, i) => {
+    if (!live[i]) return S[i];
+    let peak = -Infinity;
+    for (let b = 0; b < NUM_BANDS; b++) if (m[b] > peak) peak = m[b];
+    return Float64Array.from(m, (v) => v - peak);
+  });
 
   const self = [];
   const dom = [];
@@ -152,7 +202,7 @@ export function deriveCurves(analyses, faderDb, perTrack, knobs) {
   const pairContribution = [];
   const audible = [];
 
-  const ctx = { dom, weights, absDb, live, knobs, S, H };
+  const ctx = { dom, weights, absDb, maskerDb, maskeeDb, maskerS, live, knobs, S, H };
   const allOn = new Uint8Array(N).fill(1);
 
   for (let i = 0; i < N; i++) {
@@ -197,8 +247,8 @@ export function deriveCurves(analyses, faderDb, perTrack, knobs) {
       if (j === i || !live[j] || weights[i][j] <= 0) continue;
       const dij = dom[i][j];
       for (let b = 0; b < NUM_BANDS; b++) {
-        if (S[i][b] < SILENT_DB || S[j][b] < SILENT_DB) continue;
-        dij[b] = weights[i][j] * (clip(absDb[j][b] - absDb[i][b] + H, 0, knobs.D) / knobs.D);
+        if (S[i][b] < SILENT_DB || maskerS[j][b] < SILENT_DB) continue;
+        dij[b] = weights[i][j] * (clip(maskerDb[j][b] - maskeeDb[i][b] + H, 0, knobs.D) / knobs.D);
       }
     }
   }
@@ -256,6 +306,9 @@ export function deriveCurves(analyses, faderDb, perTrack, knobs) {
     maskProd,
     weights,
     absDb,
+    maskerDb,
+    maskeeDb,
+    maskerS,
     S,
     live,
     H,
