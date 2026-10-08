@@ -7,8 +7,11 @@ const SMOOTH = 0.02;
 // One stem's processing chain, identical for the live AudioContext and an
 // OfflineAudioContext:
 //
-//   source -> fader -> [16 peaking biquads] -> makeup -> wet -> out
-//                   \-> dry ------------------------------/
+//   source -> fader -> hpf -> [16 peaking biquads] -> makeup -> wet -> out
+//                   \-> dry -------------------------------------/
+//
+// spec.q sets every peaking filter's Q (default BAND_Q); spec.hpfHz > 0
+// engages a second-order high-pass (10 Hz when off, which is inaudible).
 //
 // `out` is left unconnected; the caller wires it to a bus or destination.
 export function buildStemChain(ctx, buffer, spec) {
@@ -19,9 +22,14 @@ export function buildStemChain(ctx, buffer, spec) {
   const out = ctx.createGain();
   const nyq = ctx.sampleRate / 2;
   const centres = bandCentres();
+  const hpf = ctx.createBiquadFilter();
+  hpf.type = "highpass";
+  hpf.Q.value = 0.7071;
+  hpf.frequency.value = 10;
+  fader.connect(hpf);
   const biquads = [];
   const usable = [];
-  let prev = fader;
+  let prev = hpf;
   for (let b = 0; b < NUM_BANDS; b++) {
     const q = ctx.createBiquadFilter();
     q.type = "peaking";
@@ -63,6 +71,9 @@ export function buildStemChain(ctx, buffer, spec) {
   function setStatic(next, immediate = false) {
     current = next;
     setParam(fader.gain, dbToGain(next.faderDb || 0), immediate);
+    const q = next.q > 0 ? next.q : BAND_Q;
+    for (const b of biquads) if (Math.abs(b.Q.value - q) > 1e-6) b.Q.value = q;
+    setParam(hpf.frequency, next.hpfHz > 0 ? next.hpfHz : 10, immediate);
     setParam(makeup.gain, dbToGain(next.makeupDb || 0), immediate);
     setBypass(!!next.bypass, immediate);
     setParam(out.gain, next.muted ? 0 : 1, immediate);
@@ -124,7 +135,7 @@ export function buildStemChain(ctx, buffer, spec) {
 
   function dispose() {
     stop();
-    for (const n of [fader, dry, wet, makeup, out, ...biquads]) n.disconnect();
+    for (const n of [fader, hpf, dry, wet, makeup, out, ...biquads]) n.disconnect();
   }
 
   if (spec) setStatic(spec, true);
@@ -133,6 +144,7 @@ export function buildStemChain(ctx, buffer, spec) {
   return {
     buffer,
     fader,
+    hpf,
     dry,
     wet,
     makeup,

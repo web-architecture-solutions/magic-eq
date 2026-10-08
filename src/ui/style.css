@@ -236,3 +236,20 @@ table.ratings td input[type="range"] { width: 70%; vertical-align: middle; }
 .overlay-svg .curve.on .curve-fill { opacity: 0.35; }
 .overlay-svg .curve.on .curve-line { stroke-width: 2.4; }
 .overlay-svg .overlap-cell { fill: var(--series-cut); }
+
+/* literature flow */
+.tabs.flow { margin-left: 4px; }
+.lit { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; padding: 8px 16px 10px; border-top: 1px solid var(--line); }
+.lit h2 { margin: 6px 0 4px; }
+.lit .slider { grid-template-columns: 240px 1fr 64px; }
+.lit .slider-label { white-space: nowrap; }
+.lit-col { min-width: 0; }
+.prov { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 5px; border-radius: 8px; margin-left: 4px; vertical-align: middle; }
+.prov-documented { background: #1f4d36; color: #9fe0bf; }
+.prov-inferred { background: #4a3a1a; color: #f0c76b; }
+.prov-unverified { background: #4a1f1f; color: #f0a0a0; }
+.lit-metric { font-size: 12px; color: var(--text-secondary); margin: 6px 0; font-variant-numeric: tabular-nums; }
+.lit-notes { font-size: 11px; color: var(--text-muted); }
+.lit-notes ul { padding-left: 16px; margin: 4px 0; }
+.view-advanced .side .lit { grid-template-columns: 1fr; padding: 0 0 8px; border-top: none; }
+.view-advanced .side .lit .slider { grid-template-columns: 150px 1fr 56px; }

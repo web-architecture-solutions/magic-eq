@@ -30,6 +30,22 @@ export const DEFAULT_KNOBS = Object.freeze({
   targetLufs: -23, // gain staging: per-stem integrated loudness target
   balanceMethod: "loudness", // "loudness" | "peakBand" | "pink"
   roleOffsets: null, // null = DEFAULT_ROLE_OFFSETS
+  // Literature flow (see litModel.js); flow selects which model drives the chain.
+  flow: "magic",
+  litAmount: 0.5,
+  litBalance: false, // a separate system (2009); on combines it with the 2015 masking stage
+  litBalanceWeighting: "a",
+  litBalanceBoosts: false,
+  litMasking: true,
+  litCutTarget: "masker",
+  litEssentialDb: 12,
+  litTopK: 3,
+  litQ: 2,
+  litMaxCut: 12,
+  litMaxBoost: 6,
+  litHpf: true,
+  litHpfHz: 80,
+  litMakeup: true,
   mixMask: ones(),
   pair: null, // [source][target] overrides, null or 1 = no override
   attackTau: 0.15,

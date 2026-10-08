@@ -20,6 +20,7 @@ import { analyzeChannels } from "../src/dsp/analyze.js";
 import { balanceLoudness, anchorFaders } from "../src/dsp/balance.js";
 import { guessRole, DEFAULT_ROLE_OFFSETS } from "../src/dsp/roles.js";
 import { deriveCurves, knobDefaults, perTrackDefaults } from "../src/dsp/model.js";
+import { deriveLitCurves } from "../src/dsp/litModel.js";
 import { evaluateCurves, erbFrameEnergies, smrReport } from "../src/dsp/metrics.js";
 
 export const PRESETS = {
@@ -32,6 +33,11 @@ export const PRESETS = {
   shape: { carveDb: 3, levelDb: 3, scoopDb: 3 },
   psycho3: { carveDb: 3, levelDb: 0, scoopDb: 0, psycho: true },
   psycho6: { carveDb: 6, levelDb: 0, scoopDb: 0, psycho: true },
+  lit: { flow: "lit" },
+  litMaskee: { flow: "lit", litCutTarget: "maskee" },
+  litAmount1: { flow: "lit", litAmount: 1 },
+  litBalance: { flow: "lit", litBalance: true },
+  litBalanceAmount1: { flow: "lit", litBalance: true, litAmount: 1 },
   sum3: { carveDb: 3, levelDb: 0, scoopDb: 0, crossNorm: "sum" },
   mean3: { carveDb: 3, levelDb: 0, scoopDb: 0, crossNorm: "mean" },
 };
@@ -104,7 +110,8 @@ export function evaluateSet(stems, { presets, balance = "lufs" }) {
   const rows = [];
   for (const name of presets) {
     const knobs = knobDefaults({ ...PRESETS[name], postFader: false });
-    const curves = deriveCurves(analyses, faders, analyses.map(() => perTrackDefaults()), knobs);
+    const pt = analyses.map(() => perTrackDefaults());
+    const curves = knobs.flow === "lit" ? deriveLitCurves(analyses, faders, pt, knobs, stems.map((s) => guessRole(s.name))) : deriveCurves(analyses, faders, pt, knobs);
     const { before, after } = evaluateCurves(analyses, curves);
     const effect = curves.effect.reduce((a, b) => a + b, 0) / curves.effect.length;
     const makeup = curves.makeupDb.reduce((a, b) => a + b, 0) / curves.makeupDb.length;
@@ -117,6 +124,7 @@ export function evaluateSet(stems, { presets, balance = "lufs" }) {
       overlapDb: curves.masking.ratioDb,
       effect,
       makeup,
+      lit: curves.flow === "lit" ? { occurrences: curves.occurrences.length, before: curves.litMasking.before, after: curves.litMasking.after } : null,
       perStem: after.stems.map((r, i) => ({ name: stems[i].name, maskedBefore: before.stems[i].maskedFraction, maskedAfter: r.maskedFraction, smrBefore: before.stems[i].meanSmrDb, smrAfter: r.meanSmrDb, effect: curves.effect[i] })),
     });
   }
@@ -160,6 +168,14 @@ async function main() {
   if (opts.balance === "lufs") console.error(`roles: ${stems.map((s, i) => `${s.name.replace(/\.[^.]+$/, "")}=${guessRole(s.name)} (${analyses[i].lufs.toFixed(1)} LUFS)`).join(", ")}`);
   console.error(`analysed and scored ${opts.presets.length} presets in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   console.log(table(rows, opts.md));
+  const litRows = rows.filter((r) => r.lit);
+  if (litRows.length) {
+    console.log(opts.md ? "\nLiterature flow, the paper's own measure (summed masking value over occurrences):\n\n| preset | occurrences | before | after |\n| --- | --- | --- | --- |" : "\nliterature flow, paper's measure (summed masking value over occurrences):");
+    for (const r of litRows) {
+      const cells = [r.preset, String(r.lit.occurrences), `${r.lit.before.toFixed(1)} dB·occ`, `${r.lit.after.toFixed(1)} dB·occ`];
+      console.log(opts.md ? `| ${cells.join(" | ")} |` : `  ${cells.map((c) => c.padEnd(16)).join("")}`);
+    }
+  }
   const ref = rows.find((r) => r.preset === "defaults") || rows[0];
   console.log(opts.md ? "\n| stem | masked before | masked after | SMR before | SMR after | effect |\n| --- | --- | --- | --- | --- | --- |" : `\nper stem (${ref.preset}):`);
   for (const s of ref.perStem) {

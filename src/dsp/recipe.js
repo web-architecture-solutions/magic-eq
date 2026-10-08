@@ -8,7 +8,8 @@ export function buildRecipe({ stems, curves, timelines, knobs, sampleRate, measu
   return {
     version: 2,
     sampleRate,
-    bandQ: round(BAND_Q, 3),
+    bandQ: round(curves.bandQ || BAND_Q, 3),
+    flow: curves.flow || "magic",
     bands: Array.from({ length: NUM_BANDS }, (_, b) => ({
       index: b,
       centreHz: round(c[b], 1),
@@ -27,6 +28,7 @@ export function buildRecipe({ stems, curves, timelines, knobs, sampleRate, measu
       role: s.role ?? "other",
       lufs: s.analysis && Number.isFinite(s.analysis.lufs) ? round(s.analysis.lufs, 2) : null,
       presenceDb: s.presenceDb ?? 0,
+      hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0,
       rowScale: s.rowScale ?? 1,
       colScale: s.colScale ?? 1,
       level: s.level ?? 1,

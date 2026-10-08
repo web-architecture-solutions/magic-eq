@@ -6,7 +6,7 @@ import { DEFAULT_ROLE_OFFSETS } from "../dsp/roles.js";
 
 export const SETTINGS_VERSION = 1;
 export const STORAGE_KEY = "magic-eq.settings";
-export const SETTINGS_KEYS = ["driveMode", "coupled", "crossNorm", "psycho", "D", "floorDb", "T", "scoopRange", "targetLufs", "balanceMethod", "roleOffsets"];
+export const SETTINGS_KEYS = ["driveMode", "coupled", "crossNorm", "psycho", "D", "floorDb", "T", "scoopRange", "targetLufs", "balanceMethod", "roleOffsets", "flow"];
 
 const num = (lo, hi) => (v) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const oneOf = (list) => (v) => list.includes(v);
@@ -23,6 +23,7 @@ export const VALIDATORS = {
   scoopRange: num(3, 30),
   targetLufs: num(-40, -6),
   balanceMethod: oneOf(["loudness", "peakBand", "pink"]),
+  flow: oneOf(["magic", "lit"]),
   roleOffsets: (v) => v === null || (v && typeof v === "object" && Object.keys(DEFAULT_ROLE_OFFSETS).every((k) => v[k] === undefined || num(-24, 24)(v[k]))),
 };
 

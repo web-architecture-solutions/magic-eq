@@ -442,3 +442,130 @@ The overlay at the top of the Mix workspace draws every stem's long-term
 ERB spectrum at mix level with an overlap strip (stems within 6 dB of the
 band's loudest and within 30 dB of their own peak). It shows overlap, not
 a problem: whether the overlap is mud or vibe is the listening decision.
+
+## 14. The Literature flow
+
+The Magic flow is this tool's own model. Its ancestry is the literature,
+but it departs from it in the direction of cuts (maskee, not masker), the
+contrast normalisation, the max-combine across maskers, the self terms,
+the soft ceiling and the activity following. Rather than keep arguing
+about fidelity inside one model, the app now carries a second, entirely
+parallel flow (`src/dsp/litModel.js`) that implements the published
+cross-adaptive methods as literally as the accessible sources allow, and
+a nav switch (Magic | Literature) that chooses which one derives the
+curves. Everything downstream (engine, plots, matrix, export, evaluation)
+consumes either flow's output unchanged.
+
+Rule for building it: where the paper states a value or a direction, use
+it; where the method implies a choice but no value is given, infer one and
+tag it; where we had to decide because the full text was not accessible,
+tag it unverified; and wherever the literature and the Magic flow diverge,
+make the divergence a control rather than picking a side. The tags are in
+`src/ui/litParams.js` and shown on every row of the panel.
+
+### Stages
+
+**A. Spectral balance.** Perez-Gonzalez & Reiss (2009), "Automatic
+equalization of multi-channel audio using cross-adaptive methods":
+accumulate each channel's per-band loudness over the track with a
+perceptual weighting, and drive each channel's band gain toward the
+cross-channel average so every channel has equal perceptual loudness in
+every band. Here: `L_i(b) = bandDb_i(b) + fader_i + w(b)`, `w` = A-weighting
+(the 40-phon approximation; a secondary source names ISO 226),
+`level_i(b) = Amount × (avg_b − L_i(b))`, clipped to the max cut and, if
+boosts are allowed, the max boost. Silent bands (S < −60 dB) are left out
+of the average and untouched. This stage is aggressive by construction:
+equal loudness per band across channels is the paper's goal, so a bass that
+is 12 dB louder than everything below 100 Hz is cut hard there. Amount
+scales it.
+
+**B. Masking reduction.** Hafezi & Reiss (2015), "Autonomous multitrack
+equalization based on masking reduction", JAES 63(5). Their simplified
+masking measure: masker i masks maskee j in a region when i is louder
+there, the region is essential for j and nonessential for i. The offline
+(semi-autonomous) system attenuates the masker at the frequencies where it
+dominates; at most three occurrences with the highest masking value per
+track are equalised with three peaking filters in series; fixed Q of 2;
+the gain is taken from the masking value; and the whole system has one
+user parameter, which the listening test found took a raw mix past the
+amateur mixes and close to the professional one. Here: essential =
+within *Essential range* of the stem's own loudest band (unverified
+threshold); masking value `m = (L_i − L_j) × pairWeight × rowScale` on
+every band that passes the test; the top-K occurrences per cut target,
+one filter per band, `cross_t(b) = −Amount × m × colScale`; the cut
+target is the masker (paper) or the maskee (Magic's direction) by a
+control; the chain's peaking filters all take Q = *Filter Q* while the
+flow is active, instead of the band-matched Q the Magic flow uses. The
+panel reports the paper's own kind of objective, the summed masking value
+over occurrences, before and after the EQ.
+
+**C. High-pass by role.** De Man & Reiss (2013), "A knowledge-engineered
+autonomous mixing system": rule families compiled from mixing textbooks,
+among them a high-pass on everything that is not a low-frequency
+instrument. Here: a second-order Butterworth high-pass at *High-pass
+frequency* on every stem whose role is not kick, bass, drums or room. The
+frequency and the role list are unverified (the paper's table was not
+accessible; textbooks range 60 to 120 Hz).
+
+**Total**: `G_i(b) = clip(level_i(b) + cross_i(b), −maxCut, maxBoost)`,
+band locks applied to both terms, loudness-match make-up as in the Magic
+flow (ours; kept so A/B against bypass is fair, and switchable off). The
+literature's offline systems are static, so activity following is off in
+this flow.
+
+### Provenance of every control
+
+| Control | Tag | Where it comes from |
+|---|---|---|
+| Amount | documented | one user parameter (Hafezi & Reiss 2015) |
+| Masking reduction on/off | documented | the method itself |
+| Cut masker / maskee | documented (masker) | the paper cuts the masker; maskee is Magic's direction, kept as the divergence toggle |
+| Essential range | unverified | threshold for essential vs nonessential is not in accessible text |
+| Filters per track | documented | at most three occurrences per track |
+| Filter Q | documented | fixed Q of 2 |
+| Max cut | unverified | gain taken from the masking value; no clamp stated |
+| Spectral balance on/off | documented | Perez-Gonzalez & Reiss 2009 |
+| Perceptual weighting | inferred | the paper weights perceptually; A-weighting stands in for ISO 226 |
+| Allow boosts | unverified | not stated; off keeps the cut-only rule from Pestana & Reiss |
+| High-pass by role | documented | De Man & Reiss 2013 rule family |
+| High-pass frequency | unverified | textbook range |
+| Loudness-match make-up | ours | not in the papers |
+
+### Not implemented
+
+- Ward, Reiss & Athwal (2012): faders by equal partial loudness (Glasberg &
+  Moore). Needs a partial-loudness model; the Gain workspace uses BS.1770
+  loudness instead (Mansbridge, Finn & Reiss 2012).
+- Ronan et al. (2018): EQ and compression chosen by optimising an MPEG-style
+  masking metric with particle swarm, with subgrouping. An optimiser, not a
+  rule; the nearest thing here is the ERB signal-to-masker metric in
+  Evaluate.
+- Hafezi & Reiss's real-time variant (1024-sample frames, low latency).
+  This flow is the offline, whole-track version, which their test preferred.
+- Free filter centres at FFT peaks. Filters sit on the 16 fixed band
+  centres, so the recipe stays typeable into any parametric EQ.
+
+### What the comparison shows
+
+`scripts/evaluate.mjs --presets bypass,defaults,lit,litMaskee,litAmount1,litBalance,litBalanceAmount1`
+on the ten Human Radio stems with the loudness balance (tables in
+`docs/EVALUATION.md`). Three things fall out:
+
+- The 2015 masking stage alone finds eight occurrences on ten balanced
+  stems and halves the paper's own measure at Amount 0.5 (11.4 to 5.8
+  dB·occ) and removes it at Amount 1 (0.2 dB·occ), with about 1 dB of mean
+  effect: "louder in a band nonessential for the masker" is rare once every
+  stem's loud bands are its own. The paper's test is written for the raw,
+  unbalanced case; the Gain workspace has already done most of its work.
+  Cutting the maskee instead (Magic's direction) raises the paper's
+  measure, by construction.
+- The 2009 spectral-balance stage is where the large gains come from (7 dB
+  mean effect at Amount 0.5), and on balanced stems it raises the 2015
+  masking measure, because equal loudness per band means cutting every
+  stem's own loud bands, which are exactly the bands the masking test
+  calls essential. The two papers are separate systems with different
+  objectives; combining them is our choice, so the balance stage is a
+  toggle and off by default.
+- Neither flow moves the ERB masked fraction by more than a few points.
+  Level and density decide that metric (§11), which is why the switch
+  exists: both flows can be heard on the same stems with the same faders.

@@ -9,6 +9,7 @@ function short(n) {
 // stem's audible range (0..1); the number inside is the editable pair weight.
 export default function MatrixView({ stems, curves, pairById, dispatch, knobs }) {
   const presenceMode = knobs?.driveMode !== "multiplier";
+  const lit = knobs?.flow === "lit";
   if (stems.length < 2) return <p className="hint">Load at least two stems to see the matrix.</p>;
   const idx = new Map(stems.map((s, i) => [s.id, i]));
   const contrib = (src, tgt) => curves?.pairContribution?.[idx.get(tgt.id)]?.[idx.get(src.id)] ?? 0;
@@ -18,7 +19,8 @@ export default function MatrixView({ stems, curves, pairById, dispatch, knobs })
 
   return (
     <div className="matrix-view">
-      <p className="hint">
+      {lit ? <p className="hint">Literature flow: colour is the masking value of the row stem over the column stem (masker louder in a band essential for the column and nonessential for the row), averaged over the column's audible bands and scaled by Max cut. Pair weights and row scalars multiply the masking value.</p> : null}
+      <p className="hint" style={lit ? { display: "none" } : undefined}>
         Row carves column. Colour: how much the row stem dominates the column stem across the column stem's audible range, at the current faders, presence and selectivity. Number: pair weight (blank = 1), multiplied with
         {presenceMode ? " the column's " : " the row's "}
         {presenceMode ? <em>accepts cuts</em> : <em>carves others</em>}
