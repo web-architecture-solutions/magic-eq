@@ -7,7 +7,8 @@ function short(n) {
 // Who carves whom. Rows are sources, columns are targets. Cell colour is the
 // measured dominance of the row stem over the column stem across the column
 // stem's audible range (0..1); the number inside is the editable pair weight.
-export default function MatrixView({ stems, curves, pairById, dispatch }) {
+export default function MatrixView({ stems, curves, pairById, dispatch, knobs }) {
+  const presenceMode = knobs?.driveMode !== "multiplier";
   if (stems.length < 2) return <p className="hint">Load at least two stems to see the matrix.</p>;
   const idx = new Map(stems.map((s, i) => [s.id, i]));
   const contrib = (src, tgt) => curves?.pairContribution?.[idx.get(tgt.id)]?.[idx.get(src.id)] ?? 0;
@@ -18,8 +19,12 @@ export default function MatrixView({ stems, curves, pairById, dispatch }) {
   return (
     <div className="matrix-view">
       <p className="hint">
-        Row carves column. Colour: how much the row stem dominates the column stem across the column stem's audible range, at the current faders and selectivity. Number: pair weight (blank = 1), multiplied with the row's
-        <em> carves others</em> and the column's <em>accepts cuts</em>.
+        Row carves column. Colour: how much the row stem dominates the column stem across the column stem's audible range, at the current faders, presence and selectivity. Number: pair weight (blank = 1), multiplied with
+        {presenceMode ? " the column's " : " the row's "}
+        {presenceMode ? <em>accepts cuts</em> : <em>carves others</em>}
+        {presenceMode ? ". The margin sets each stem's presence: an analysis-only level offset in the contest." : " and the column's "}
+        {presenceMode ? null : <em>accepts cuts</em>}
+        {presenceMode ? null : "."}
       </p>
       <table className="matrix">
         <thead>
@@ -30,8 +35,8 @@ export default function MatrixView({ stems, curves, pairById, dispatch }) {
                 {short(t.name)}
               </th>
             ))}
-            <th className="margin" title={titleOf("rowScale")}>
-              carves ×
+            <th className="margin" title={titleOf(presenceMode ? "presenceDb" : "rowScale")}>
+              {presenceMode ? "presence dB" : "carves ×"}
             </th>
             <th className="margin">dominates</th>
           </tr>
@@ -58,7 +63,19 @@ export default function MatrixView({ stems, curves, pairById, dispatch }) {
                 )
               )}
               <td className="margin">
-                <input type="number" min={0} max={4} step={0.1} value={s.rowScale} title={titleOf("rowScale")} onChange={(e) => dispatch({ type: "SET_STEM", id: s.id, patch: { rowScale: parseFloat(e.target.value) || 0 } })} />
+                {presenceMode ? (
+                  <input
+                    type="number"
+                    min={-12}
+                    max={12}
+                    step={0.5}
+                    value={s.presenceDb ?? 0}
+                    title={`fader ${(curves?.faders?.[idx.get(s.id)] ?? 0).toFixed(1)} + presence ${(s.presenceDb ?? 0).toFixed(1)} = ${((curves?.faders?.[idx.get(s.id)] ?? 0) + (s.presenceDb ?? 0)).toFixed(1)} dB in the contest`}
+                    onChange={(e) => dispatch({ type: "SET_STEM", id: s.id, patch: { presenceDb: parseFloat(e.target.value) || 0 } })}
+                  />
+                ) : (
+                  <input type="number" min={0} max={4} step={0.1} value={s.rowScale} title={titleOf("rowScale")} onChange={(e) => dispatch({ type: "SET_STEM", id: s.id, patch: { rowScale: parseFloat(e.target.value) || 0 } })} />
+                )}
               </td>
               <td className="margin num">{(rowTotal(s) * 100).toFixed(0)}%</td>
             </tr>

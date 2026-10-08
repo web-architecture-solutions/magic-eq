@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { reducer, initialState, newStem, pairArray, effectiveMuted } from "./state/reducer.js";
+import { reducer, initialState, initState, newStem, pairArray, effectiveMuted } from "./state/reducer.js";
+import { loadSettings, saveSettings, isModified } from "./state/settings.js";
 import { deriveCurves } from "./dsp/model.js";
 import { buildGainTimelines, timelineValueAt } from "./dsp/timeline.js";
 import { NUM_BANDS } from "./dsp/bands.js";
@@ -15,6 +16,7 @@ import MatrixView from "./ui/MatrixView.jsx";
 import Transport from "./ui/Transport.jsx";
 import ExportModal from "./ui/ExportModal.jsx";
 import ListeningTest from "./ui/ListeningTest.jsx";
+import SettingsModal from "./ui/SettingsModal.jsx";
 
 const TABS = [
   ["mix", "Mix"],
@@ -26,10 +28,16 @@ const TABS = [
 const BYTES_PER_SAMPLE = 4;
 
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, undefined, () => initState(loadSettings()));
   const { stems, knobs, pairById, sessionRate, mixBypass, exportState } = state;
   const [tab, setTab] = useState("mix");
   const [exportOpen, setExportOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [highlightTerm, setHighlightTerm] = useState(null);
+  useEffect(() => {
+    saveSettings(knobs);
+  }, [knobs]);
+  const settingsModified = isModified(knobs);
   const [trimMix, setTrimMix] = useState(true);
 
   const sessionRateRef = useRef(sessionRate);
@@ -179,7 +187,7 @@ export default function App() {
     ));
 
   return (
-    <div className="app">
+    <div className={`app${highlightTerm ? ` hl-${highlightTerm}` : ""}`}>
       <div className="header">
         <nav className="nav">
           <h1>Magic EQ</h1>
@@ -200,9 +208,12 @@ export default function App() {
           <button type="button" className="primary" disabled={stems.length === 0} onClick={() => setExportOpen(true)}>
             Export
           </button>
+          <button type="button" className={`gear${settingsModified ? " modified" : ""}`} onClick={() => setSettingsOpen(true)} title={settingsModified ? "Settings (modified from defaults)" : "Settings"}>
+            ⚙
+          </button>
         </nav>
         <Transport engine={engine} canPlay={readyStems.length > 0} mixBypass={mixBypass} onMixBypass={(v) => dispatch({ type: "SET_MIX_BYPASS", value: v })} masking={readyStems.length > 1 ? curves.masking : null} />
-        {tab === "mix" ? <MacroKnobs knobs={knobs} dispatch={dispatch} /> : null}
+        {tab === "mix" ? <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} /> : null}
       </div>
 
       <main className={`view view-${tab}`}>
@@ -212,17 +223,18 @@ export default function App() {
           <div className="columns">
             <div className="stems">{cards(true)}</div>
             <aside className="side">
-              <MacroKnobs knobs={knobs} dispatch={dispatch} />
-              <AdvancedPanel knobs={knobs} dispatch={dispatch} onReanalyze={reanalyze} needsReanalysis={needsReanalysis} />
+              <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} compact />
+              <AdvancedPanel knobs={knobs} dispatch={dispatch} />
             </aside>
           </div>
         ) : null}
-        {tab === "matrix" ? <MatrixView stems={stems} curves={curves} pairById={pairById} dispatch={dispatch} /> : null}
+        {tab === "matrix" ? <MatrixView stems={stems} curves={curves} pairById={pairById} dispatch={dispatch} knobs={knobs} /> : null}
         {tab === "listen" ? (
           <ListeningTest stems={stems} specs={specs} timelines={timelines} curves={curves} sessionRate={sessionRate} knobsLabel={`unmask ${knobs.carveDb} · flatten ${knobs.levelDb} · scoop ${knobs.scoopDb}`} />
         ) : null}
       </main>
 
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} knobs={knobs} dispatch={dispatch} onReanalyze={reanalyze} needsReanalysis={needsReanalysis} modified={settingsModified} />
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} exportState={exportState} canExport={allReady} onExport={onExport} trimMix={trimMix} onTrimMix={setTrimMix} stemCount={stems.length} />
     </div>
   );

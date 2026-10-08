@@ -38,9 +38,32 @@ export const PARAMS = {
     name: "Ceiling",
     symbol: "M",
     unit: "dB",
-    short: "Soft limit on any band's total cut.",
+    short: "Limit on any band's total cut. A preference, not a rule.",
     long:
-      "Linear up to 75% of the ceiling, then compressed so the cut approaches but never exceeds it. A cap mark on the plot shows bands being held back. Turning any knob still changes something past the knee, just less.",
+      "The manual technique works in 1 to 2 dB steps and rarely stacks past a few dB per band; the default is that habit scaled up, nothing more. If pushing past it sounds better, raise it. Knee sets how it limits: hard (clamp) or soft (compression from a fraction of the ceiling). Cap marks on the plot show bands being held back.",
+  },
+  knee: {
+    name: "Knee",
+    symbol: "",
+    unit: "",
+    short: "How the ceiling limits: 0 is a hard clamp.",
+    long:
+      "At 0 the cut is clamped at the ceiling. Above 0 the cut is linear up to (1 − knee) of the ceiling and then compressed so it approaches the ceiling without reaching it; every knob still moves something past the knee, just less. The dotted line on the plot marks where compression starts.",
+  },
+  presenceDb: {
+    name: "Presence",
+    symbol: "p",
+    unit: "dB",
+    short: "How prominent this stem is treated in the contest.",
+    long:
+      "Analysis-only level offset: added to this stem's level in the dominance test, as masker and as maskee, so a raised stem carves more and accepts less. Playback and make-up never see it. This is the demaskers' input-level trick done per stem; the global version of it is Selectivity. Note that lowering a stem's presence lets everyone dominate it more uniformly, and the uniform part is removed as flat contest.",
+  },
+  driveMode: {
+    name: "Stem drive",
+    symbol: "",
+    unit: "",
+    short: "Presence in dB, or Carves others as a multiplier.",
+    long: "Presence shifts a stem's level in the contest (both sides). Carves others multiplies its dominance as a source only. Accepts cuts applies in both modes.",
   },
   floorDb: {
     name: "Audible range",

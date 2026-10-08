@@ -104,7 +104,10 @@ h2:first-child { margin-top: 0; }
 .tab { background: none; border: none; border-radius: 4px; padding: 4px 12px; color: var(--text-secondary); }
 .tab.on { background: var(--surface-2); color: var(--text-primary); }
 .transport { border-bottom: none; }
-.macro { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)) auto; gap: 6px 18px; padding: 6px 16px 10px; align-items: center; border-top: 1px solid var(--line); }
+.macro { display: grid; grid-template-columns: minmax(150px, 0.8fr) repeat(4, minmax(160px, 1fr)) minmax(200px, 1.2fr) auto; gap: 6px 18px; padding: 6px 16px 10px; align-items: center; border-top: 1px solid var(--line); }
+.macro.compact { grid-template-columns: 1fr; }
+.ceiling-pair { display: flex; flex-direction: column; gap: 4px; }
+.macro .preset select { width: 100%; }
 .macro .slider { grid-template-columns: 84px 1fr 54px; }
 .macro-checks { display: flex; flex-direction: column; gap: 2px; }
 @media (max-width: 1200px) { .macro { grid-template-columns: repeat(3, minmax(160px, 1fr)); } }
@@ -166,3 +169,21 @@ table.ratings { border-collapse: collapse; width: 100%; }
 table.ratings th, table.ratings td { padding: 4px 8px; border-bottom: 1px solid var(--line); }
 table.ratings td input[type="range"] { width: 70%; vertical-align: middle; }
 .listen-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* v3: attribution, settings, presence */
+.plot .bar-cut-hit { fill: transparent; }
+.plot .seg-cross { fill: var(--series-cut); opacity: 0.9; }
+.plot .seg-level { fill: #9085e9; opacity: 0.9; }
+.plot .seg-scoop { fill: #d55181; opacity: 0.9; }
+.plot .sw-cross { fill: var(--series-cut); }
+.plot .sw-level { fill: #9085e9; }
+.plot .sw-scoop { fill: #d55181; }
+.app.hl-cross .seg-level, .app.hl-cross .seg-scoop, .app.hl-level .seg-cross, .app.hl-level .seg-scoop, .app.hl-scoop .seg-cross, .app.hl-scoop .seg-level { opacity: 0.18; }
+.app.hl-cross .sw-level, .app.hl-cross .sw-scoop, .app.hl-level .sw-cross, .app.hl-level .sw-scoop, .app.hl-scoop .sw-cross, .app.hl-scoop .sw-level { opacity: 0.3; }
+.plot .cap { stroke: var(--text-secondary); stroke-width: 2; }
+.gear { font-size: 15px; padding: 3px 9px; position: relative; }
+.gear.modified::after { content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+.modal.settings h3 { font-size: 12px; margin: 14px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.modal.settings .slider { grid-template-columns: 130px 1fr 64px; }
+.lock-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.lock-presets button { font-size: 11px; padding: 2px 8px; }

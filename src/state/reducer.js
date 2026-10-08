@@ -1,4 +1,5 @@
-import { knobDefaults } from "../dsp/model.js";
+import { knobDefaults, DEFAULT_KNOBS } from "../dsp/model.js";
+import { SETTINGS_KEYS } from "./settings.js";
 import { ones } from "../dsp/bands.js";
 
 let nextId = 1;
@@ -32,11 +33,29 @@ export function newStem(name) {
     bypass: false,
     level: 1,
     scoop: 1,
+    presenceDb: 0,
     rowScale: 1,
     colScale: 1,
     mask: ones(),
     enabled: true,
   };
+}
+
+// Switching coupling converts each stem's Flatten/Scoop between multiplier
+// and absolute dB so the sliders keep their meaning.
+function withCoupling(state, coupled) {
+  if (coupled === state.knobs.coupled) return state;
+  const { levelDb, scoopDb } = state.knobs;
+  const stems = state.stems.map((s) => ({
+    ...s,
+    level: coupled ? (levelDb > 0 ? (s.level ?? 0) / levelDb : 1) : (s.level ?? 1) * levelDb,
+    scoop: coupled ? (scoopDb > 0 ? (s.scoop ?? 0) / scoopDb : 1) : (s.scoop ?? 1) * scoopDb,
+  }));
+  return { ...state, stems, knobs: { ...state.knobs, coupled } };
+}
+
+export function initState(persistedSettings = {}) {
+  return { ...initialState, knobs: { ...initialState.knobs, ...persistedSettings } };
 }
 
 function patchStem(state, id, patch) {
@@ -84,9 +103,16 @@ export function reducer(state, action) {
       return patchStem(state, action.id, { mask });
     }
     case "SET_KNOB":
+      if (action.key === "coupled") return withCoupling(state, action.value);
       return { ...state, knobs: { ...state.knobs, [action.key]: action.value } };
     case "SET_KNOBS":
       return { ...state, knobs: { ...state.knobs, ...action.patch } };
+    case "RESET_SETTINGS": {
+      let next = withCoupling(state, DEFAULT_KNOBS.coupled);
+      const patch = {};
+      for (const k of SETTINGS_KEYS) patch[k] = DEFAULT_KNOBS[k];
+      return { ...next, knobs: { ...next.knobs, ...patch } };
+    }
     case "SET_MIX_MASK": {
       const mixMask = state.knobs.mixMask.slice();
       mixMask[action.band] = action.value;

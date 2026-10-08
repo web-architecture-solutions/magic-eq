@@ -18,7 +18,7 @@ const range = (lo, hi, v) => {
   return o;
 };
 
-const BASE = { carveDb: 3, levelDb: 0, scoopDb: 0, focus: 0.5, D: 12, maxCut: 4, floorDb: -24, T: -12, scoopRange: 12 };
+const BASE = { carveDb: 3, levelDb: 0, scoopDb: 0, focus: 0.5, D: 12, maxCut: 4, floorDb: -24, T: -12, scoopRange: 12, knee: 0.25 };
 
 function threeStems() {
   const bass = spec({ ...range(2, 4, 0), ...range(5, 7, -12) });
@@ -196,8 +196,8 @@ describe("deriveCurves: knobs", () => {
     expect(c.G[BASS][6]).toBeCloseTo(-3, 9);
   });
 
-  it("rowScale 0 removes the bass's dominance over everyone", () => {
-    const c = threeStemCase({}, undefined, [{ rowScale: 0 }, {}, {}]);
+  it("rowScale 0 removes the bass's dominance over everyone (multiplier mode)", () => {
+    const c = threeStemCase({ driveMode: "multiplier" }, undefined, [{ rowScale: 0 }, {}, {}]);
     for (let b = 0; b < NUM_BANDS; b++) {
       expect(c.dom[GTR][BASS][b]).toBe(0);
       expect(c.dom[PAD][BASS][b]).toBe(0);
@@ -205,6 +205,28 @@ describe("deriveCurves: knobs", () => {
     expect(c.G[GTR][2]).toBe(0);
     expect(c.G[GTR][3]).toBe(0);
     expect(c.G[BASS][6]).toBeCloseTo(-3, 9);
+  });
+
+  it("in presence mode rowScale is ignored", () => {
+    const c = threeStemCase({ driveMode: "presence" }, undefined, [{ rowScale: 0 }, {}, {}]);
+    expect(c.G[GTR][3]).toBeCloseTo(-3, 9);
+  });
+
+  it("band lock covers the self terms too", () => {
+    const mask = new Array(NUM_BANDS).fill(1);
+    mask[3] = 0;
+    const c = threeStemCase({ levelDb: 3, scoopDb: 6 }, undefined, [{ mask }, {}, {}]);
+    expect(c.G[BASS][3]).toBe(0);
+    expect(c.levelTerm[BASS][3]).toBe(0);
+    expect(c.levelTerm[BASS][2]).toBeCloseTo(-3, 9);
+    expect(c.scoopTerm[BASS][5]).toBeCloseTo(-3, 9);
+  });
+
+  it("the term split sums to the unclamped cut", () => {
+    const c = threeStemCase({ levelDb: 2, scoopDb: 4 });
+    for (let i = 0; i < 3; i++) for (let b = 0; b < NUM_BANDS; b++) {
+      expect(c.levelTerm[i][b] + c.scoopTerm[i][b] + c.crossTerm[i][b]).toBeCloseTo(c.unclamped[i][b], 9);
+    }
   });
 
   it("a pair override scales one ordered pair only", () => {
@@ -232,7 +254,66 @@ describe("deriveCurves: knobs", () => {
   });
 });
 
+describe("presence", () => {
+  it("+6 on the guitar removes the pad sliver and changes nothing else", () => {
+    const base = threeStemCase();
+    const c = threeStemCase({}, undefined, [{}, { presenceDb: 6 }, {}]);
+    expect(c.dom[GTR][PAD][4]).toBe(0);
+    for (let i = 0; i < 3; i++) for (let b = 0; b < NUM_BANDS; b++) expect(c.G[i][b]).toBeCloseTo(base.G[i][b], 9);
+  });
+
+  it("+12 on the guitar softens the bass's cut of it to 9/12", () => {
+    const c = threeStemCase({}, undefined, [{}, { presenceDb: 12 }, {}]);
+    for (let b = 2; b <= 4; b++) expect(c.G[GTR][b]).toBeCloseTo(-2.25, 9);
+    expect(c.effect[GTR]).toBeCloseTo(2.25, 9);
+    expect(c.G[BASS][6]).toBeCloseTo(-3, 9);
+    expect(c.G[BASS][7]).toBeCloseTo(-3, 9);
+  });
+
+  it("-12 on the bass interacts with the contrast floor", () => {
+    const c = threeStemCase({}, undefined, [{ presenceDb: -12 }, {}, {}]);
+    for (let b = 2; b <= 4; b++) expect(c.dom[BASS][GTR][b]).toBeCloseTo(0.25, 9);
+    for (let b = 5; b <= 7; b++) expect(c.dom[BASS][PAD][b]).toBeCloseTo(10 / 12, 9);
+    expect(c.crossMin[BASS]).toBeCloseTo(0.25, 9);
+    for (let b = 2; b <= 4; b++) expect(c.G[BASS][b]).toBe(0);
+    expect(c.G[BASS][5]).toBeCloseTo(-1.75, 9);
+    expect(c.G[BASS][6]).toBeCloseTo(-2.25, 9);
+    expect(c.G[BASS][7]).toBeCloseTo(-2.25, 9);
+    expect(c.G[PAD][5]).toBeCloseTo(-0.5, 9);
+  });
+
+  it("post-fader plus pad presence -20 reproduces the baseline", () => {
+    const base = threeStemCase();
+    const c = threeStemCase({ postFader: true }, undefined, [{}, {}, { presenceDb: -20 }]);
+    expect(c.faders).toEqual([0, 0, 0]);
+    for (let i = 0; i < 3; i++) for (let b = 0; b < NUM_BANDS; b++) expect(c.G[i][b]).toBeCloseTo(base.G[i][b], 9);
+    expect(c.masking.before).not.toBeCloseTo(base.masking.before, 6);
+  });
+
+  it("is ignored in multiplier mode and never touches make-up or playback", () => {
+    const base = threeStemCase({ driveMode: "multiplier" });
+    const c = threeStemCase({ driveMode: "multiplier" }, undefined, [{ presenceDb: -12 }, { presenceDb: 12 }, {}]);
+    for (let i = 0; i < 3; i++) for (let b = 0; b < NUM_BANDS; b++) expect(c.G[i][b]).toBeCloseTo(base.G[i][b], 9);
+    const p = threeStemCase({}, undefined, [{}, { presenceDb: 12 }, {}]);
+    expect(p.faders).toEqual([0, 0, -20]);
+  });
+
+  it("is the same whether psycho weighting is on or off relative to itself", () => {
+    const a = threeStemCase({ psycho: true }, undefined, [{}, { presenceDb: 6 }, {}]);
+    expect(a.dom[GTR][PAD][4]).toBe(0);
+  });
+});
+
 describe("softClamp", () => {
+  it("softness 0 is a hard clamp", () => {
+    expect(softClamp(-5, 4, 0)).toBe(-4);
+    expect(softClamp(-3.5, 4, 0)).toBe(-3.5);
+    expect(softClamp(-3.5, 4, 0.25)).toBeGreaterThan(-3.5);
+    const hard = threeStemCase({ levelDb: 12, knee: 0 });
+    expect(hard.G[BASS][3]).toBe(-4);
+    expect(hard.ceilingBands[BASS]).toBe(3);
+  });
+
   it("is linear below the knee, bounded by maxCut, and monotone", () => {
     expect(softClamp(-3, 4)).toBe(-3);
     expect(softClamp(0, 4)).toBe(0);

@@ -45,13 +45,18 @@ sample rate; later stems at a different rate are resampled to it on load.
    following) at its source level, the mix at fader level, and `recipe.json`
    holds the per-band gains, the gate transitions, and the sparse automation.
 
-Four views: **Mix** has the five knobs that matter and a card per stem.
+Four views: **Mix** has a preset menu, the five knobs that matter (with Knee
+next to Ceiling), and a card per stem. Hover Unmask, Flatten or Scoop to see
+that knob's share of every stem's cut; the cut bars are stacked by term.
 **Advanced** adds per-stem multipliers, band locks, the full model knobs, the
 gate settings, and a description of every control. **Matrix** shows who carves
 whom (colour) with the editable per-pair weights and the row/column scalars.
 **Listen** is a blind, loudness-matched comparison over a loop, with external
 renders of the same stems as extra conditions. Hover any control for what it
-does and what it interacts with.
+does and what it interacts with. The gear in the nav opens **Settings**: how
+the model is configured (stem drive, coupling, combine mode, psychoacoustic
+weighting, dominance range, audible range, reach, activity threshold), saved
+in the browser; mix state is never saved.
 
 Export also reports an objective masking measure (ERB-band signal-to-masker
 ratio) on the rendered audio, before and after. `docs/EVALUATION.md` explains
@@ -68,18 +73,21 @@ Mix view (the macro knobs):
 | Flatten | α | Damp a stem's own peaks: full depth at its loudest band, nothing at *Flatten reach* below. |
 | Scoop | β | Cut the valleys between a stem's modes, leaving the modes at 0 dB. |
 | Selectivity | H | 0: cut wherever another stem is at least as loud; 1: only where it clearly dominates. |
-| Ceiling | M | Soft limit on any band's total cut (linear to 75%, then compressed). |
+| Ceiling | M | Limit on any band's total cut. A preference, not a rule: push it if it sounds better. |
+| Knee | | 0 is a hard clamp; above 0 the cut compresses from (1 − knee) of the ceiling. |
 
 Per stem: fader, mute, solo, bypass, *in model*. In Advanced also *Flatten ×*
 and *Scoop ×* (multipliers on the global amounts, or absolute dB when
-uncoupled), *Carves others* (row scalar), *Accepts cuts* (column scalar, 0 for
-leads and vocals), and a 16-band *band lock*.
+uncoupled), *Presence* (analysis-only level offset in the dominance test, the
+demaskers' input-level trick per stem; or *Carves others* as a multiplier,
+chosen in Settings), *Accepts cuts* (column scalar, 0 for leads and vocals),
+and a 16-band *band lock* that covers every term.
 
-Advanced model knobs: *Dominance range* (D), *Audible range*, *Flatten reach*
-(T), *Scoop reach*, *Combine others* (max / sum / mean), *Couple stem knobs*,
-*Psychoacoustic weighting* (A-weighting plus upward spread of masking across
-the bands, off by default), *Mix band lock*; and *Follow activity* with
-attack, release and threshold.
+Settings: *Stem drive*, *Couple stem knobs*, *Combine others* (max / sum /
+mean), *Psychoacoustic weighting* (A-weighting plus upward spread of masking
+across the bands, off by default), *Dominance range* (D), *Audible range*,
+*Flatten reach* (T), *Scoop reach*, *Activity threshold*. Advanced: *Mix band
+lock* with lock presets, *Follow activity* with attack and release.
 
 Flatten and Scoop oppose each other (one cuts peaks, the other cuts valleys);
 equal amounts of both tend toward a flat cut that make-up cancels.

@@ -56,7 +56,11 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
             <>
               <Slider k="level" label={knobs.coupled ? "Flatten ×" : "Flatten"} unit={knobs.coupled ? "×" : "dB"} value={stem.level} min={0} max={knobs.coupled ? 3 : 12} step={knobs.coupled ? 0.05 : 0.1} onChange={(v) => set({ level: v })} />
               <Slider k="scoop" label={knobs.coupled ? "Scoop ×" : "Scoop"} unit={knobs.coupled ? "×" : "dB"} value={stem.scoop} min={0} max={knobs.coupled ? 3 : 12} step={knobs.coupled ? 0.05 : 0.1} onChange={(v) => set({ scoop: v })} />
-              <Slider k="rowScale" value={stem.rowScale} min={0} max={3} step={0.05} onChange={(v) => set({ rowScale: v })} />
+              {knobs.driveMode === "multiplier" ? (
+                <Slider k="rowScale" value={stem.rowScale} min={0} max={3} step={0.05} onChange={(v) => set({ rowScale: v })} />
+              ) : (
+                <Slider k="presenceDb" value={stem.presenceDb ?? 0} min={-12} max={12} step={0.5} onChange={(v) => set({ presenceDb: v })} />
+              )}
               <Slider k="colScale" value={stem.colScale} min={0} max={3} step={0.05} onChange={(v) => set({ colScale: v })} />
             </>
           ) : null}
@@ -71,7 +75,17 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
         <div className="stem-plot">
           {ready ? (
             <>
-              <SpectrumPlot S={a.S} E={a.E} G={curves?.G?.[index]} unclamped={curves?.unclamped?.[index]} live={liveG} maxCut={knobs.maxCut} audible={curves?.audible?.[index]} />
+              <SpectrumPlot
+                S={a.S}
+                E={a.E}
+                G={curves?.G?.[index]}
+                unclamped={curves?.unclamped?.[index]}
+                terms={curves ? { cross: curves.crossTerm?.[index], level: curves.levelTerm?.[index], scoop: curves.scoopTerm?.[index] } : null}
+                live={liveG}
+                maxCut={knobs.maxCut}
+                knee={knobs.knee}
+                audible={curves?.audible?.[index]}
+              />
               <ActivityStrip transitions={a.gate.transitions} duration={stem.durationSec} position={position} activeFraction={a.gate.activeFraction} />
             </>
           ) : (

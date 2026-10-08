@@ -22,6 +22,13 @@ export function buildRecipe({ stems, curves, timelines, knobs, sampleRate, measu
     stems: stems.map((s, i) => ({
       name: s.name,
       faderDb: curves.faders[i],
+      presenceDb: s.presenceDb ?? 0,
+      rowScale: s.rowScale ?? 1,
+      colScale: s.colScale ?? 1,
+      level: s.level ?? 1,
+      scoop: s.scoop ?? 1,
+      mask: s.mask ? Array.from(s.mask) : undefined,
+      enabled: s.enabled !== false,
       makeupDbEstimated: round(curves.makeupDb[i], 2),
       makeupDbMeasured:
         measuredMakeupDb && measuredMakeupDb[i] != null ? round(measuredMakeupDb[i], 2) : null,

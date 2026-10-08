@@ -362,3 +362,39 @@ stems. In short: the objective effect of 3 to 6 dB static cuts is under one
 point of masked fraction on a balanced ten-stem mix, because level and
 density dominate the metric. The listening test decides whether that is the
 "subtle but real" of the manual technique or nothing at all.
+
+## 12. Positioning: an arrangement model, not an ear model
+
+The demaskers and their literature model the ear: ERB or Bark excitation
+patterns, spreading functions, masking thresholds, partial loudness. Their
+defining controls fall out of that threshold: attack and release because
+the threshold moves with the signal, detection resolution, and "drive" by
+overdriving the sidechain so more of the input falls under the threshold
+(TheMasker's input level with output compensation).
+
+This tool models the arrangement: long-term spectra, which bands each part
+occupies, and a rule for how much each part defers where others live. That
+is the best-practice tradition (Hafezi & Reiss's "simplified measure based
+on best practice"; Pestana & Reiss's compiled mixing rules) rather than
+psychoacoustics, and its goal is the manual technique's: fit together
+before colour, without flattening, and leave the mud in when it is the
+vibe. Masking metrics are therefore diagnostics here, not objectives
+(`docs/EVALUATION.md`).
+
+Consequences for the controls:
+
+- The thresholds are guardrails chosen from the technique, not
+  psychoacoustic facts. The ceiling defaults to 9 dB with a soft knee, both
+  adjustable in the view, and the UI says so.
+- The demaskers' drive move maps onto two of our controls. A global masker
+  offset is exactly Selectivity (headroom H). A per-stem offset is Presence:
+  an analysis-only level shift in the dominance test, both as masker and
+  as maskee, which playback and make-up never see. Presence vs the older
+  "carves others" multiplier is a setting.
+- Attribution: every cut is the sum of three terms (Unmask, Flatten, Scoop),
+  drawn stacked, with a hover on each knob to show its share across the
+  session, so "which parameter affects what" is visible rather than
+  explained.
+- Band locks cover every term, so a locked band is truly untouched.
+- Settings (how the model is configured) are separated from mix state and
+  persisted; mix state never is.
