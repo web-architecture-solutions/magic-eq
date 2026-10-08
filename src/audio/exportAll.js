@@ -24,7 +24,7 @@ function baseName(name) {
 
 // Renders every stem and the mix, encodes 24-bit WAVs, and builds the recipe.
 // specs[i] = { faderDb, makeupDb, gains }, timelines[i] from buildGainTimelines.
-export async function exportAll({ stems, specs, timelines, curves, knobs, sampleRate, trimMix = true, evaluate = true, onProgress }) {
+export async function exportAll({ stems, specs, timelines, curves, knobs, sampleRate, trimMix = true, evaluate = true, masterTrimDb = 0, onProgress }) {
   const files = [];
   const measuredMakeupDb = [];
   const processed = [];
@@ -67,7 +67,7 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
   report("Rendering mix");
   const mixSpecs = specs.map((sp, i) => ({ ...sp, makeupDb: (sp.makeupDb || 0) + processed[i].residual }));
   const mix = await renderMix(stems, mixSpecs, timelines, sampleRate);
-  const mixChans = channelsOf(mix);
+  const mixChans = channelsOf(mix, dbToGain(masterTrimDb || 0));
   let mixPeak = 0;
   for (const ch of mixChans) for (let i = 0; i < ch.length; i++) mixPeak = Math.max(mixPeak, Math.abs(ch[i]));
   let mixTrimDb = 0;

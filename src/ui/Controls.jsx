@@ -6,6 +6,7 @@ export function Label({ k, text, onHover }) {
     <span className="slider-label" title={titleOf(k)} onMouseEnter={onHover ? () => onHover(true) : undefined} onMouseLeave={onHover ? () => onHover(false) : undefined}>
       {text ?? p?.name ?? k}
       {p?.symbol ? <span className="sym"> {p.symbol}</span> : null}
+      {!text && p?.alias ? <span className="alias"> ({p.alias})</span> : null}
     </span>
   );
 }

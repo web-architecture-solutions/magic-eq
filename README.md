@@ -25,16 +25,36 @@ npm run build
 Stems should be WAV (16/24/32-bit or float). The first stem sets the session
 sample rate; later stems at a different rate are resampled to it on load.
 
+## Workspaces
+
+**Gain** comes first: one fader strip per stem with its integrated loudness
+(ITU BS.1770, K-weighted and gated, measured per channel), sample peak, a
+role guessed from the file name, the automatic fader, your trim, and a live
+meter. *Balance* equalises every stem's loudness to the target plus its
+role offset (lead vocal on top; drums, bass, cymbals and room mics lower;
+all editable in Settings), then shifts everything so the loudest fader
+lands at 0 dB: nothing is ever boosted. Trims survive a re-balance. The
+master row predicts the mix peak from the stems' per-frame peaks (a
+coherent-sum bound and an uncorrelated estimate) and offers a master trim
+that aims it at −6 dBFS. Two alternative methods exist for comparison: a
+peak-band rule, and a pink reference that reproduces the manual
+pink-noise trick on per-frame ERB spectra, bias included.
+
+**Mix** holds the EQ work, with an overlay at the top showing every stem's
+long-term spectrum at mix level and a strip of how many stems compete in
+each band. Its sub-views are Simple, Advanced, Matrix and Listen.
+
 ## Workflow
 
-1. **Import stems.** Each one is decoded, mixed to mono, and analysed in a Web
-   Worker: a Welch-averaged spectrum in 16 log bands (20 Hz to 20 kHz, 0.625
-   octave each) over the frames where the stem is actually playing, plus an
-   activity gate and the "mode envelope" through its spectral peaks.
-2. **Set faders** to the intended mix level, or tick *Stems are post-fader* if
-   they were exported with the mix balance baked in. The cross cuts are computed
-   at mix level, so this matters.
-3. **Turn up Unmask.** Then Scoop, then Flatten if you want it. Every depth knob
+1. **Import stems.** Each one is decoded and analysed in a Web Worker: a
+   Welch-averaged spectrum in 16 log bands (20 Hz to 20 kHz, 0.625 octave
+   each) over the frames where the stem is actually playing, an activity
+   gate, the "mode envelope" through its spectral peaks, per-channel loudness
+   and peaks, and a long-term ERB spectrum for the overlay.
+2. **Balance** in the Gain workspace (or tick *Stems are post-fader* if the
+   stems were exported with the mix balance baked in). The cross cuts are
+   computed at mix level, so this matters.
+3. **Turn up Depth.** Then Valley cut, then Peak taming if you want it. Every depth knob
    is a contrast in dB: the part of a stem's cut that would be the same in every
    audible band is removed (make-up gain would cancel it anyway), so each knob
    keeps doing something across its whole range, however many stems you load.
@@ -69,12 +89,12 @@ Mix view (the macro knobs):
 
 | Knob | Symbol | Meaning |
 |---|---|---|
-| Unmask | W | Depth of the cross-track cuts, as contrast across each stem's audible range. |
-| Flatten | α | Damp a stem's own peaks: full depth at its loudest band, nothing at *Flatten reach* below. |
-| Scoop | β | Cut the valleys between a stem's modes, leaving the modes at 0 dB. |
-| Selectivity | H | 0: cut wherever another stem is at least as loud; 1: only where it clearly dominates. |
-| Ceiling | M | Limit on any band's total cut. A preference, not a rule: push it if it sounds better. |
-| Knee | | 0 is a hard clamp; above 0 the cut compresses from (1 − knee) of the ceiling. |
+| Depth (was Unmask) | W | Depth of the cross-track cuts, as contrast across each stem's audible range. |
+| Peak taming (was Flatten) | α | Damp a stem's own peaks: full depth at its loudest band, nothing at *Flatten reach* below. |
+| Valley cut (was Scoop) | β | Cut the valleys between a stem's modes, leaving the modes at 0 dB. |
+| Threshold (was Selectivity) | H | 0: cut wherever another stem is at least as loud; 1: only where it clearly dominates. |
+| Max cut (was Ceiling) | M | Limit on any band's total cut. A preference, not a rule: push it if it sounds better. |
+| Knee | | 0 is a hard clamp; above 0 the cut compresses from (1 − knee) of the max cut. |
 
 Per stem: fader, mute, solo, bypass, *in model*. In Advanced also *Flatten ×*
 and *Scoop ×* (multipliers on the global amounts, or absolute dB when
@@ -89,14 +109,16 @@ across the bands, off by default), *Dominance range* (D), *Audible range*,
 *Flatten reach* (T), *Scoop reach*, *Activity threshold*. Advanced: *Mix band
 lock* with lock presets, *Follow activity* with attack and release.
 
-Flatten and Scoop oppose each other (one cuts peaks, the other cuts valleys);
-equal amounts of both tend toward a flat cut that make-up cancels.
+Peak taming and Valley cut oppose each other (one cuts peaks, the other cuts
+valleys); equal amounts of both tend toward a flat cut that make-up cancels.
+Hover Depth, Peak taming or Valley cut to see that term's share of every
+stem's cut; the cut bars are stacked by term.
 
 ## Layout
 
 ```
 src/dsp/      pure DSP, no DOM: bands, fft, gate, envelope, analyze, model,
-              timeline, metrics, wav, recipe
+              timeline, metrics, loudness (BS.1770), roles, balance, wav, recipe
 src/audio/    Web Audio: decode, analysis worker, shared live/offline chain
               (graph.js), live engine, offline render, export
 src/ui/       React components and the engine hook

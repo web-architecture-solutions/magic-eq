@@ -398,3 +398,47 @@ Consequences for the controls:
 - Band locks cover every term, so a locked band is truly untouched.
 - Settings (how the model is configured) are separated from mix state and
   persisted; mix state never is.
+
+## 13. Gain staging
+
+Everything downstream is confounded by level: the dominance test, the
+masking metric and the ear all decide by who is louder before any EQ runs.
+The manual method (set each track just audible over pink noise, then push
+kick and bass up and hats down) is a practitioner approximation of what the
+automatic-mixing literature does formally. Mansbridge, Finn & Reiss (2012)
+set faders by EBU R128 / ITU BS.1770 loudness toward a common target with a
+hysteresis gate; De Man et al. and Wilson & Fazenda measured where
+instruments sit relative to the mix in professional mixes (lead vocal on
+top by roughly 3 LU in some studies and more in others, drums and bass
+lower, large per-song spread). Pestana & Reiss list equal loudness as a
+starting rule.
+
+The Gain workspace implements that: per-stem integrated loudness
+(`src/dsp/loudness.js`, K-weighting from the prewarped analog prototype so
+any sample rate matches the Annex 1 table, 400 ms blocks, absolute and
+relative gates, per-channel power with mono treated as dual-mono because
+the engine plays it on both speakers), `Balance = target + roleOffset −
+LUFS`, anchored so the loudest resulting fader is 0 dB (the model is
+invariant to a global offset, so anchoring is a convention, not safety).
+Role offsets are heuristics, editable, with two known biases: K-weighting
+under-counts low frequencies, and gating makes a sparse crash and a
+continuous pad at equal loudness unequal in prominence. Trims are the
+user's and survive a re-balance.
+
+Why K-weighting rather than the pink trick: on 0.625-octave bands pink noise
+reads flat, so the band-domain version of the trick is just "loudest band
+to target" (offered as Peak band). The faithful version uses per-frame ERB
+spectra against a pink slope and the 95th percentile over active frames
+(offered as Pink reference); it reproduces the method's treble bias
+because narrow bands at high frequencies hold less pink power. Loudness
+weighting is what the bias was compensating for by hand.
+
+Headroom is predicted without rendering from per-frame peaks: a coherent
+sum (upper bound) and a root-sum-square (uncorrelated estimate); the master
+trim suggestion aims the bound at −6 dBFS, and the live master meter is
+the truth.
+
+The overlay at the top of the Mix workspace draws every stem's long-term
+ERB spectrum at mix level with an overlap strip (stems within 6 dB of the
+band's loudest and within 30 dB of their own peak). It shows overlap, not
+a problem: whether the overlap is mud or vibe is the listening decision.

@@ -1,5 +1,6 @@
 import { knobDefaults, DEFAULT_KNOBS } from "../dsp/model.js";
 import { SETTINGS_KEYS } from "./settings.js";
+import { guessRole } from "../dsp/roles.js";
 import { ones } from "../dsp/bands.js";
 
 let nextId = 1;
@@ -10,6 +11,8 @@ export const initialState = {
   pairById: {}, // { [sourceId]: { [targetId]: weight } }
   sessionRate: null,
   mixBypass: false,
+  masterTrimDb: 0,
+  lastBalance: null, // { method, shiftDb, at }
   exportState: { status: "idle", progress: null, files: [], error: null, evaluation: null },
 };
 
@@ -27,7 +30,9 @@ export function newStem(name) {
     length: 0,
     durationSec: 0,
     analysis: null,
-    faderDb: 0,
+    role: guessRole(name),
+    autoFaderDb: null, // set by Balance
+    trimDb: 0, // manual, survives a re-balance
     mute: false,
     solo: false,
     bypass: false,
@@ -52,6 +57,11 @@ function withCoupling(state, coupled) {
     scoop: coupled ? (scoopDb > 0 ? (s.scoop ?? 0) / scoopDb : 1) : (s.scoop ?? 1) * scoopDb,
   }));
   return { ...state, stems, knobs: { ...state.knobs, coupled } };
+}
+
+// The fader the model and the engine use.
+export function stemFaderDb(stem) {
+  return (stem.autoFaderDb ?? 0) + (stem.trimDb ?? 0);
 }
 
 export function initState(persistedSettings = {}) {
@@ -126,6 +136,21 @@ export function reducer(state, action) {
     }
     case "SET_MIX_BYPASS":
       return { ...state, mixBypass: action.value };
+    case "SET_MASTER_TRIM":
+      return { ...state, masterTrimDb: action.value };
+    case "BALANCE": {
+      const by = new Map(action.faders.map((f) => [f.id, f.autoFaderDb]));
+      return {
+        ...state,
+        stems: state.stems.map((s) => (by.has(s.id) ? { ...s, autoFaderDb: by.get(s.id) } : s)),
+        knobs: { ...state.knobs, postFader: false },
+        lastBalance: { method: action.method, shiftDb: action.shiftDb, at: Date.now() },
+      };
+    }
+    case "RESET_TRIMS":
+      return { ...state, stems: state.stems.map((s) => ({ ...s, trimDb: 0 })) };
+    case "CLEAR_BALANCE":
+      return { ...state, stems: state.stems.map((s) => ({ ...s, autoFaderDb: null })), lastBalance: null };
     case "EXPORT_STATE":
       return { ...state, exportState: { ...state.exportState, ...action.patch } };
     default:

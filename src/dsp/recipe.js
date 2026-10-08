@@ -22,6 +22,10 @@ export function buildRecipe({ stems, curves, timelines, knobs, sampleRate, measu
     stems: stems.map((s, i) => ({
       name: s.name,
       faderDb: curves.faders[i],
+      autoFaderDb: s.autoFaderDb ?? null,
+      trimDb: s.trimDb ?? 0,
+      role: s.role ?? "other",
+      lufs: s.analysis && Number.isFinite(s.analysis.lufs) ? round(s.analysis.lufs, 2) : null,
       presenceDb: s.presenceDb ?? 0,
       rowScale: s.rowScale ?? 1,
       colScale: s.colScale ?? 1,

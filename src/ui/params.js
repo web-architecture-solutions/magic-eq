@@ -3,7 +3,8 @@
 // labels, title tooltips and the help list.
 export const PARAMS = {
   carveDb: {
-    name: "Unmask",
+    name: "Depth",
+    alias: "Unmask",
     symbol: "W",
     unit: "dB",
     short: "How deep stems are cut where others dominate them.",
@@ -11,7 +12,8 @@ export const PARAMS = {
       "Depth of the cross-track cuts, as contrast: each stem's least-contested audible band sits at 0 dB and its most-contested band gets up to this many dB. Scaled per pair by the matrix and per stem by Accepts cuts. Setting it to 0 leaves only Flatten and Scoop.",
   },
   levelDb: {
-    name: "Flatten",
+    name: "Peak taming",
+    alias: "Flatten",
     symbol: "α",
     unit: "dB",
     short: "Damp each stem's own peaks.",
@@ -19,7 +21,8 @@ export const PARAMS = {
       "Self term. The stem's loudest band is cut by this many dB; bands further than Flatten reach (T) below the peak are untouched, with a linear ramp between. Opposes Scoop: equal amounts of both tend toward a flat cut, which make-up gain cancels.",
   },
   scoopDb: {
-    name: "Scoop",
+    name: "Valley cut",
+    alias: "Scoop",
     symbol: "β",
     unit: "dB",
     short: "Cut the valleys between a stem's modes.",
@@ -27,7 +30,8 @@ export const PARAMS = {
       "Self term. Finds the stem's modes (fundamental and harmonics, the local maxima of its spectrum) and cuts between them, leaving the modes at 0 dB. A valley Scoop reach dB deep gets the full depth; shallower valleys proportionally less. This keeps the bite of a bass while clearing the space around it.",
   },
   focus: {
-    name: "Selectivity",
+    name: "Threshold",
+    alias: "Selectivity",
     symbol: "H",
     unit: "",
     short: "Where a cross cut counts as deserved.",
@@ -35,7 +39,8 @@ export const PARAMS = {
       "Sets the headroom in the dominance test. At 0, a stem is cut wherever another stem is at least as loud there at mix level; at 1, only where the other stem out-levels it by the full Dominance range. Internally H = (1 − Selectivity) × D.",
   },
   maxCut: {
-    name: "Ceiling",
+    name: "Max cut",
+    alias: "Ceiling",
     symbol: "M",
     unit: "dB",
     short: "Limit on any band's total cut. A preference, not a rule.",
@@ -128,14 +133,14 @@ export const PARAMS = {
       "Column scalar in the matrix: multiplies the Unmask depth applied to this stem. 0 for leads and vocals that should sit on top; above 1 to push a bed further back.",
   },
   level: {
-    name: "Flatten ×",
+    name: "Peak taming ×",
     symbol: "α×",
     unit: "",
     short: "This stem's share of the global Flatten.",
     long: "Multiplier on the global Flatten when coupled; absolute dB when uncoupled.",
   },
   scoop: {
-    name: "Scoop ×",
+    name: "Valley cut ×",
     symbol: "β×",
     unit: "",
     short: "This stem's share of the global Scoop.",
@@ -200,7 +205,45 @@ export const PARAMS = {
     short: "Frames below this count as silent.",
     long: "Also decides which frames go into each stem's spectrum. Changing it needs a re-analysis.",
   },
+  targetLufs: {
+    name: "Loudness target",
+    symbol: "LUFS",
+    unit: "LUFS",
+    short: "Where Balance puts each stem's integrated loudness.",
+    long: "ITU BS.1770 integrated loudness (K-weighted, gated) over the stem on its own. The absolute value only sets how far below 0 dB the faders land; the balance between stems is what matters.",
+  },
+  balanceMethod: {
+    name: "Balance method",
+    symbol: "",
+    unit: "",
+    short: "Loudness (recommended), peak band, or pink reference.",
+    long: "Loudness: equal K-weighted integrated loudness plus role offsets, the method the fader-automation literature uses. Peak band: the stem's loudest 16-band level to a target, the band-domain version of the pink-noise trick without its treble bias. Pink reference: per-frame ERB spectrum against a pink slope, 95th percentile over active frames, which reproduces the manual method including its bias.",
+  },
+  roleOffsets: {
+    name: "Role offsets",
+    symbol: "",
+    unit: "dB",
+    short: "Level relative to equal loudness per instrument role.",
+    long: "Heuristics directionally consistent with professional mixes (lead vocal on top; drums, bass, cymbals and room mics lower), editable. Two biases to know: K-weighting under-counts low frequencies (the bass offset partly compensates), and gating means a sparse crash and a continuous pad at equal loudness are not equally prominent.",
+  },
+  presenceDbNote: { name: "", symbol: "", unit: "", short: "", long: "" },
+  trimDb: {
+    name: "Trim",
+    symbol: "",
+    unit: "dB",
+    short: "Your manual offset on top of the automatic fader.",
+    long: "Survives a re-balance. The Mix views' fader slider edits this.",
+  },
+  masterTrimDb: {
+    name: "Master trim",
+    symbol: "",
+    unit: "dB",
+    short: "Gain on the summed mix, for headroom.",
+    long: "Applied to live playback and to the exported mix. The suggestion aims the predicted mix peak at -6 dBFS.",
+  },
 };
+
+delete PARAMS.presenceDbNote;
 
 export function nameOf(key) {
   return PARAMS[key]?.name ?? key;
@@ -209,5 +252,6 @@ export function nameOf(key) {
 export function titleOf(key) {
   const p = PARAMS[key];
   if (!p) return "";
-  return `${p.name}${p.symbol ? ` (${p.symbol})` : ""}: ${p.short} ${p.long}`;
+  const alias = p.alias ? `, formerly ${p.alias}` : "";
+  return `${p.name}${p.symbol ? ` (${p.symbol}${alias})` : alias ? ` (${p.alias})` : ""}: ${p.short} ${p.long}`;
 }

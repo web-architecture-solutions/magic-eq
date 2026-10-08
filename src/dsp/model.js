@@ -27,6 +27,9 @@ export const DEFAULT_KNOBS = Object.freeze({
   crossNorm: "max", // "max" | "sum" | "mean": how the other stems combine per band
   coupled: true, // per-stem level/scoop are multipliers on the global depths (else absolute dB)
   psycho: false, // loudness-weight band levels and spread maskers upward before the dominance test
+  targetLufs: -23, // gain staging: per-stem integrated loudness target
+  balanceMethod: "loudness", // "loudness" | "peakBand" | "pink"
+  roleOffsets: null, // null = DEFAULT_ROLE_OFFSETS
   mixMask: ones(),
   pair: null, // [source][target] overrides, null or 1 = no override
   attackTau: 0.15,

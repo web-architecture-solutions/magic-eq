@@ -49,3 +49,14 @@ export function monoFromBuffer(buffer) {
   }
   return out;
 }
+
+// Copies of every channel, transferable to a worker.
+export function channelsFromBuffer(buffer) {
+  const out = [];
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const ch = new Float32Array(buffer.length);
+    buffer.copyFromChannel(ch, c);
+    out.push(ch);
+  }
+  return out;
+}

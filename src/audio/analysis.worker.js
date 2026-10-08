@@ -1,9 +1,9 @@
-import { analyzeStem } from "../dsp/analyze.js";
+import { analyzeChannels } from "../dsp/analyze.js";
 
 self.onmessage = (e) => {
-  const { mono, sampleRate, opts } = e.data;
+  const { channels, sampleRate, opts } = e.data;
   try {
-    const analysis = analyzeStem(mono, sampleRate, opts, (value) => {
+    const analysis = analyzeChannels(channels, sampleRate, opts, (value) => {
       self.postMessage({ type: "progress", value });
     });
     const transfer = [
@@ -14,6 +14,8 @@ self.onmessage = (e) => {
       analysis.frameRmsDb.buffer,
       analysis.active.buffer,
       analysis.erb.energies.buffer,
+      analysis.erb.meanDb.buffer,
+      analysis.framePeaksDb.buffer,
     ];
     self.postMessage({ type: "done", analysis }, transfer);
   } catch (err) {

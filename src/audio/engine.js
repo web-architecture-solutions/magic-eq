@@ -18,12 +18,47 @@ export class LiveEngine {
     this.pausedOffset = 0;
     this.onEnded = null;
     this._endTimer = null;
+    this.masterTrim = ctx.createGain();
+    this.master.disconnect();
+    this.master.connect(this.masterTrim);
+    this.masterTrim.connect(ctx.destination);
+    this.masterAnalyser = ctx.createAnalyser();
+    this.masterAnalyser.fftSize = 8192;
+    this.masterAnalyser.smoothingTimeConstant = 0;
+    this.masterTrim.connect(this.masterAnalyser);
+    this._meterBuf = new Float32Array(8192);
+  }
+
+  setMasterTrimDb(db) {
+    this.masterTrim.gain.setTargetAtTime(Math.pow(10, (db || 0) / 20), this.ctx.currentTime, 0.02);
+  }
+
+  // Mono-average RMS and peak (dBFS) per stem and on the master, read from
+  // AnalyserNode taps. fftSize 8192 covers more than one 100 ms tick.
+  meters() {
+    const read = (an) => {
+      an.getFloatTimeDomainData(this._meterBuf);
+      let acc = 0;
+      let pk = 0;
+      for (let i = 0; i < this._meterBuf.length; i++) {
+        const v = this._meterBuf[i];
+        acc += v * v;
+        const a = v < 0 ? -v : v;
+        if (a > pk) pk = a;
+      }
+      const rms = Math.sqrt(acc / this._meterBuf.length);
+      return { rmsDb: rms > 0 ? 20 * Math.log10(rms) : -120, peakDb: pk > 0 ? 20 * Math.log10(pk) : -120 };
+    };
+    const stems = {};
+    for (const [id, chain] of this.chains) if (chain.analyser) stems[id] = read(chain.analyser);
+    return { stems, master: read(this.masterAnalyser) };
   }
 
   load(stems) {
     const keep = new Set(stems.map((s) => s.id));
     for (const [id, chain] of this.chains) {
       if (!keep.has(id)) {
+        chain.analyser?.disconnect();
         chain.dispose();
         this.chains.delete(id);
         this.specs.delete(id);
@@ -35,6 +70,10 @@ export class LiveEngine {
       if (this.chains.has(s.id)) continue;
       const chain = buildStemChain(this.ctx, s.buffer, null);
       chain.out.connect(this.master);
+      chain.analyser = this.ctx.createAnalyser();
+      chain.analyser.fftSize = 8192;
+      chain.analyser.smoothingTimeConstant = 0;
+      chain.out.connect(chain.analyser);
       this.chains.set(s.id, chain);
     }
   }
@@ -112,5 +151,7 @@ export class LiveEngine {
     this.chains.clear();
     this.specs.clear();
     this.master.disconnect();
+    this.masterTrim.disconnect();
+    this.masterAnalyser.disconnect();
   }
 }

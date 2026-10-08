@@ -14,8 +14,9 @@ function statusOf(stem) {
 }
 
 // One stem. `advanced` adds the per-stem model controls.
-export default function StemCard({ stem, index, curves, liveG, muted, knobs, dispatch, onRemove, advanced, position, needsReanalysis }) {
+export default function StemCard({ stem, index, curves, liveG, muted, knobs, dispatch, onRemove, advanced, position, needsReanalysis, onHover, color }) {
   const set = (patch) => dispatch({ type: "SET_STEM", id: stem.id, patch });
+  const faderDb = (stem.autoFaderDb ?? 0) + (stem.trimDb ?? 0);
   const a = stem.analysis;
   const ready = stem.status === "ready" && a && !a.empty;
   const effect = curves?.effect?.[index] ?? 0;
@@ -24,8 +25,9 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
   const makeup = curves?.makeupDb?.[index] ?? 0;
 
   return (
-    <section className={`stem${muted ? " muted" : ""}${stem.enabled ? "" : " disabled"}`}>
+    <section className={`stem${muted ? " muted" : ""}${stem.enabled ? "" : " disabled"}`} onMouseEnter={onHover ? () => onHover(stem.id) : undefined} onMouseLeave={onHover ? () => onHover(null) : undefined}>
       <header className="stem-head">
+        {color ? <span className="swatch" style={{ background: color }} /> : null}
         <strong className="stem-name" title={stem.name}>
           {stem.name}
         </strong>
@@ -51,7 +53,16 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
 
       <div className={`stem-body${advanced ? " advanced" : ""}`}>
         <div className="stem-controls">
-          <Slider k="fader" value={knobs.postFader ? 0 : stem.faderDb} min={-40} max={12} step={0.5} disabled={knobs.postFader} onChange={(v) => set({ faderDb: v })} />
+          <Slider
+            k="fader"
+            label={stem.autoFaderDb != null ? `Fader (auto ${stem.autoFaderDb.toFixed(1)})` : undefined}
+            value={knobs.postFader ? 0 : faderDb}
+            min={-40}
+            max={12}
+            step={0.5}
+            disabled={knobs.postFader}
+            onChange={(v) => set({ trimDb: v - (stem.autoFaderDb ?? 0) })}
+          />
           {advanced ? (
             <>
               <Slider k="level" label={knobs.coupled ? "Flatten ×" : "Flatten"} unit={knobs.coupled ? "×" : "dB"} value={stem.level} min={0} max={knobs.coupled ? 3 : 12} step={knobs.coupled ? 0.05 : 0.1} onChange={(v) => set({ level: v })} />

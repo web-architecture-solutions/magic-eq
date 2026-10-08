@@ -78,7 +78,7 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
             acc += t * scale;
             return [name, from, acc];
           });
-          const detail = terms ? ` (unmask ${(terms.cross?.[b] ?? 0).toFixed(2)}, flatten ${(terms.level?.[b] ?? 0).toFixed(2)}, scoop ${(terms.scoop?.[b] ?? 0).toFixed(2)})` : "";
+          const detail = terms ? ` (depth ${(terms.cross?.[b] ?? 0).toFixed(2)}, peak taming ${(terms.level?.[b] ?? 0).toFixed(2)}, valley cut ${(terms.scoop?.[b] ?? 0).toFixed(2)})` : "";
           return (
             <g key={b}>
               <rect x={PAD_L + b * bw + 1} y={top2} width={bw - 2} height={Math.max(0, y)} className="bar-cut-hit" rx={2}>
@@ -103,7 +103,7 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
         <tspan className="sw-spec">■</tspan> spectrum (dB rel. peak) <tspan className="sw-env">—</tspan> modes
       </text>
       <text x={W - PAD_R} y={H1 + 12} className="legend" textAnchor="end">
-        <tspan className="sw-cross">■</tspan> unmask <tspan className="sw-level">■</tspan> flatten <tspan className="sw-scoop">■</tspan> scoop{live ? " " : ""}
+        <tspan className="sw-cross">■</tspan> depth <tspan className="sw-level">■</tspan> peak taming <tspan className="sw-scoop">■</tspan> valley cut{live ? " " : ""}
         {live ? <tspan className="sw-live">■</tspan> : null}
         {live ? " now" : ""}
       </text>

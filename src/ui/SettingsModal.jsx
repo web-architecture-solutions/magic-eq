@@ -1,5 +1,6 @@
 import { Slider, Check } from "./Controls.jsx";
 import { PARAMS, titleOf } from "./params.js";
+import { ROLES, DEFAULT_ROLE_OFFSETS } from "../dsp/roles.js";
 
 // Configuration, not mix state: how the model is set up. Persisted.
 export default function SettingsModal({ open, onClose, knobs, dispatch, onReanalyze, needsReanalysis, modified }) {
@@ -52,6 +53,39 @@ export default function SettingsModal({ open, onClose, knobs, dispatch, onReanal
         <Slider k="floorDb" value={knobs.floorDb} min={-60} max={-6} step={1} onChange={set("floorDb")} />
         <Slider k="T" value={knobs.T} min={-30} max={-1} step={0.5} onChange={set("T")} />
         <Slider k="scoopRange" value={knobs.scoopRange} min={3} max={30} step={0.5} onChange={set("scoopRange")} />
+
+        <h3>Gain staging</h3>
+        <label className="slider" title={titleOf("balanceMethod")}>
+          <span className="slider-label">{PARAMS.balanceMethod.name}</span>
+          <select value={knobs.balanceMethod} onChange={(e) => dispatch({ type: "SET_KNOB", key: "balanceMethod", value: e.target.value })}>
+            <option value="loudness">Loudness (K-weighted) + role offsets</option>
+            <option value="peakBand">Peak band to target</option>
+            <option value="pink">Pink reference (manual method)</option>
+          </select>
+          <span />
+        </label>
+        <Slider k="targetLufs" value={knobs.targetLufs} min={-40} max={-6} step={1} onChange={set("targetLufs")} />
+        <div className="offsets" title={titleOf("roleOffsets")}>
+          <span className="slider-label">{PARAMS.roleOffsets.name}</span>
+          <div className="offsets-grid">
+            {ROLES.map(([role, label]) => (
+              <label key={role}>
+                <span>{label}</span>
+                <input
+                  type="number"
+                  step={0.5}
+                  min={-24}
+                  max={24}
+                  value={(knobs.roleOffsets ?? DEFAULT_ROLE_OFFSETS)[role] ?? 0}
+                  onChange={(e) => dispatch({ type: "SET_KNOB", key: "roleOffsets", value: { ...(knobs.roleOffsets ?? DEFAULT_ROLE_OFFSETS), [role]: parseFloat(e.target.value) || 0 } })}
+                />
+              </label>
+            ))}
+          </div>
+          <button type="button" onClick={() => dispatch({ type: "SET_KNOB", key: "roleOffsets", value: null })} disabled={!knobs.roleOffsets}>
+            Reset offsets
+          </button>
+        </div>
 
         <h3>Analysis</h3>
         <Slider k="gateDb" value={knobs.gateDb} min={-80} max={-20} step={1} onChange={set("gateDb")} />

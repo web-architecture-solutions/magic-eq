@@ -4,11 +4,12 @@ import { LiveEngine } from "../audio/engine.js";
 
 // Owns the live AudioContext and LiveEngine. Rebuilds the graph when the set
 // of ready stems or the session rate changes; pushes specs on every change.
-export function useEngine({ readyStems, sessionRate, specs }) {
+export function useEngine({ readyStems, sessionRate, specs, masterTrimDb = 0 }) {
   const engineRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [meters, setMeters] = useState(null);
   const readyKey = readyStems.map((s) => s.id).join(",");
 
   useEffect(() => {
@@ -45,10 +46,22 @@ export function useEngine({ readyStems, sessionRate, specs }) {
   }, [specs]);
 
   useEffect(() => {
-    if (!playing) return undefined;
-    const t = setInterval(() => setPosition(engineRef.current?.position() ?? 0), 100);
+    if (!playing) {
+      setMeters(null);
+      return undefined;
+    }
+    const t = setInterval(() => {
+      const e = engineRef.current;
+      if (!e) return;
+      setPosition(e.position());
+      setMeters(e.meters());
+    }, 100);
     return () => clearInterval(t);
   }, [playing]);
+
+  useEffect(() => {
+    engineRef.current?.setMasterTrimDb(masterTrimDb);
+  }, [masterTrimDb, readyKey]);
 
   useEffect(() => () => engineRef.current?.dispose(), []);
 
@@ -72,5 +85,5 @@ export function useEngine({ readyStems, sessionRate, specs }) {
 
   const toggle = useCallback(() => (playing ? stop() : play()), [playing, play, stop]);
 
-  return { playing, position, duration, play, stop, seek, toggle };
+  return { playing, position, duration, meters, play, stop, seek, toggle };
 }

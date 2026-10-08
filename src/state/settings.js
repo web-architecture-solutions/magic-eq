@@ -2,10 +2,11 @@
 // never mix state. Stored sparsely (only values that differ from defaults)
 // under a versioned key, validated on load, with storage access at the edge.
 import { DEFAULT_KNOBS } from "../dsp/model.js";
+import { DEFAULT_ROLE_OFFSETS } from "../dsp/roles.js";
 
 export const SETTINGS_VERSION = 1;
 export const STORAGE_KEY = "magic-eq.settings";
-export const SETTINGS_KEYS = ["driveMode", "coupled", "crossNorm", "psycho", "D", "floorDb", "T", "scoopRange"];
+export const SETTINGS_KEYS = ["driveMode", "coupled", "crossNorm", "psycho", "D", "floorDb", "T", "scoopRange", "targetLufs", "balanceMethod", "roleOffsets"];
 
 const num = (lo, hi) => (v) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const oneOf = (list) => (v) => list.includes(v);
@@ -20,11 +21,18 @@ export const VALIDATORS = {
   floorDb: num(-60, -6),
   T: num(-30, -1),
   scoopRange: num(3, 30),
+  targetLufs: num(-40, -6),
+  balanceMethod: oneOf(["loudness", "peakBand", "pink"]),
+  roleOffsets: (v) => v === null || (v && typeof v === "object" && Object.keys(DEFAULT_ROLE_OFFSETS).every((k) => v[k] === undefined || num(-24, 24)(v[k]))),
 };
+
+function same(a, b) {
+  return a === b || (a && b && typeof a === "object" && JSON.stringify(a) === JSON.stringify(b));
+}
 
 export function diffSettings(knobs, defaults = DEFAULT_KNOBS) {
   const out = {};
-  for (const k of SETTINGS_KEYS) if (knobs[k] !== defaults[k] && VALIDATORS[k](knobs[k])) out[k] = knobs[k];
+  for (const k of SETTINGS_KEYS) if (!same(knobs[k], defaults[k]) && VALIDATORS[k](knobs[k])) out[k] = knobs[k];
   return out;
 }
 

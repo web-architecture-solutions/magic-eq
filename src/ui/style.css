@@ -188,3 +188,51 @@ table.ratings td input[type="range"] { width: 70%; vertical-align: middle; }
 .modal.settings .slider { grid-template-columns: 130px 1fr 64px; }
 .lock-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .lock-presets button { font-size: 11px; padding: 2px 8px; }
+
+/* v4: workspaces, gain staging, overlay */
+.tabs.workspaces { margin-right: 4px; }
+.tabs.workspaces .tab { font-weight: 600; }
+.alias { color: var(--text-muted); font-size: 11px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.gain { display: flex; flex-direction: column; gap: 12px; max-width: 1500px; margin: 0 auto; }
+.gain-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.gain-toolbar .slider { min-width: 300px; }
+.gain-master { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: center; background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.headroom { display: flex; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-secondary); }
+.master-meter { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 8px; }
+.strips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.strip { flex: 0 0 200px; background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.strip.muted { opacity: 0.55; }
+.strip-head { display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip-head strong { overflow: hidden; text-overflow: ellipsis; }
+.strip .role { width: 100%; font-size: 11px; }
+.strip-readouts { display: flex; gap: 8px; font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.strip .slider { grid-template-columns: 40px 1fr 52px; }
+.strip-fader { display: flex; justify-content: space-between; align-items: baseline; font-variant-numeric: tabular-nums; }
+.strip-buttons { display: flex; gap: 4px; }
+.meter { position: relative; height: 10px; background: var(--surface-0); border-radius: 3px; overflow: hidden; }
+.meter-rms { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-env); opacity: 0.8; transition: width 80ms linear; }
+.meter-peak { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text-primary); transition: left 80ms linear; }
+.meter-zero { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--warn); opacity: 0.6; }
+.offsets { margin: 6px 0; }
+.offsets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 6px 0; }
+.offsets-grid label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary); gap: 6px; }
+.offsets-grid input { width: 64px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; color: inherit; }
+
+.overlay-wrap { max-width: 1400px; margin: 0 auto 12px; }
+.overlay-toggle { font-size: 11px; margin-bottom: 4px; }
+.overlay { background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.overlay-legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+.legend-chip { border: 1px solid; background: var(--surface-2); color: var(--text-secondary); font-size: 11px; padding: 1px 8px; }
+.legend-chip.off { opacity: 0.4; text-decoration: line-through; }
+.legend-chip.on { color: var(--text-primary); background: var(--surface-0); }
+.overlay-svg { width: 100%; height: auto; display: block; }
+.overlay-svg .grid { stroke: var(--line); stroke-width: 1; }
+.overlay-svg .axis { fill: var(--text-muted); font-size: 10px; }
+.overlay-svg .curve-fill { opacity: 0.18; }
+.overlay-svg .curve-line { fill: none; stroke-width: 1.6; opacity: 0.9; }
+.overlay-svg .curve.dim .curve-fill { opacity: 0.05; }
+.overlay-svg .curve.dim .curve-line { opacity: 0.25; }
+.overlay-svg .curve.on .curve-fill { opacity: 0.35; }
+.overlay-svg .curve.on .curve-line { stroke-width: 2.4; }
+.overlay-svg .overlap-cell { fill: var(--series-cut); }

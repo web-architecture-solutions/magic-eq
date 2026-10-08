@@ -1,10 +1,10 @@
-import { analyzeStem } from "../dsp/analyze.js";
+import { analyzeChannels } from "../dsp/analyze.js";
 
 // Runs analyzeStem in a dedicated Worker, transferring the mono array in.
 // Falls back to the main thread if Workers are unavailable.
-export function analyzeInWorker(mono, sampleRate, opts = {}, onProgress) {
+export function analyzeInWorker(channels, sampleRate, opts = {}, onProgress) {
   if (typeof Worker === "undefined") {
-    return Promise.resolve(analyzeStem(mono, sampleRate, opts, onProgress));
+    return Promise.resolve(analyzeChannels(channels, sampleRate, opts, onProgress));
   }
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./analysis.worker.js", import.meta.url), {
@@ -26,6 +26,6 @@ export function analyzeInWorker(mono, sampleRate, opts = {}, onProgress) {
       worker.terminate();
       reject(err.error || new Error(err.message || "analysis worker failed"));
     };
-    worker.postMessage({ mono, sampleRate, opts }, [mono.buffer]);
+    worker.postMessage({ channels, sampleRate, opts }, channels.map((c) => c.buffer));
   });
 }

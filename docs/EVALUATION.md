@@ -36,8 +36,9 @@ identities revealed on request; ratings downloadable as JSON.
 node scripts/evaluate.mjs <wav files or dirs> [--presets a,b] [--balance rms|none] [--rendered dir] [--md]
 ```
 
-`--balance rms` (default) sets each stem's fader so its RMS over active
-frames is equal, a rough static mix. `--rendered dir` scores `<name>.eq.wav`
+`--balance lufs` (default) is the app's Balance: equal BS.1770 loudness
+plus role offsets guessed from file names, anchored so nothing is boosted.
+`--balance rms` equalises RMS over active frames instead. `--rendered dir` scores `<name>.eq.wav`
 files on the actual audio, which is how another tool's output on the same
 stems gets a number.
 

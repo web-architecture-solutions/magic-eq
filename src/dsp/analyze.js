@@ -3,6 +3,8 @@ import { makeSpectrumAnalyser } from "./fft.js";
 import { frameRmsDb, detectGate, numFramesFor } from "./gate.js";
 import { modeEnvelope } from "./envelope.js";
 import { erbBinRanges, accumulateErb, NUM_ERB } from "./metrics.js";
+import { integratedLoudness, samplePeakDb, framePeaksDb } from "./loudness.js";
+import { mixToMono } from "./mono.js";
 
 export const DB_FLOOR = -120;
 
@@ -73,6 +75,17 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
   for (let b = 0; b < NUM_BANDS; b++) S[b] = bandDb[b] - peakDb;
   const E = modeEnvelope(S);
 
+  // Long-term ERB spectrum over active frames (power mean), for the overlay.
+  const erbMeanDb = new Float64Array(NUM_ERB).fill(DB_FLOOR);
+  if (activeFrames > 0) {
+    const acc = new Float64Array(NUM_ERB);
+    for (let f = 0; f < numFrames; f++) {
+      if (!gate.active[f]) continue;
+      for (let b = 0; b < NUM_ERB; b++) acc[b] += erbEnergies[f * NUM_ERB + b];
+    }
+    for (let b = 0; b < NUM_ERB; b++) erbMeanDb[b] = acc[b] > 0 ? Math.max(DB_FLOOR, 10 * Math.log10(acc[b] / activeFrames)) : DB_FLOOR;
+  }
+
   if (onProgress) onProgress(1);
 
   return {
@@ -88,7 +101,7 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
     E,
     frameRmsDb: rms,
     active: gate.active,
-    erb: { numBands: NUM_ERB, energies: erbEnergies },
+    erb: { numBands: NUM_ERB, energies: erbEnergies, meanDb: erbMeanDb },
     gate: {
       transitions: gate.transitions,
       activeFraction: gate.activeFraction,
@@ -96,4 +109,17 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
     },
     empty,
   };
+}
+
+// Full per-stem measurement from the channel arrays: the analysis on the
+// mono mix plus BS.1770 loudness and peaks per channel. Used by the worker
+// and the CLI so both agree.
+export function analyzeChannels(channels, sampleRate, opts = {}, onProgress) {
+  const mono = mixToMono(channels);
+  const analysis = analyzeStem(mono, sampleRate, opts, onProgress);
+  const { lufs } = integratedLoudness(channels, sampleRate);
+  analysis.lufs = lufs;
+  analysis.samplePeakDb = samplePeakDb(channels);
+  analysis.framePeaksDb = framePeaksDb(channels, analysis.nfft, analysis.hop);
+  return analysis;
 }

@@ -1,12 +1,12 @@
 // Objective evaluation of the model on a set of stems.
 //
 //   node scripts/evaluate.mjs <wav files or dirs...> [--presets a,b,c] [--limit N]
-//        [--balance rms|none] [--rendered <dir>] [--json <out>] [--md]
+//        [--balance lufs|rms|none] [--rendered <dir>] [--json <out>] [--md]
 //
-// --balance rms sets each stem's fader so its RMS over active frames is equal
-// (a rough static mix), which is what the metric needs: level decides masking
-// first, EQ is second order. Raw tracking levels (--balance none) leave the
-// quiet stems buried whatever the EQ does.
+// --balance lufs (default) is the app's Balance: equal BS.1770 loudness plus
+// role offsets guessed from file names, anchored so nothing is boosted.
+// --balance rms equalises RMS over active frames; none keeps raw tracking
+// levels, which leave the quiet stems buried whatever the EQ does.
 //
 // Scores each preset with the ERB signal-to-masker metric (src/dsp/metrics.js)
 // before and after the derived cuts. With --rendered, also scores the real
@@ -16,7 +16,9 @@ import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from "
 import { basename, extname, join } from "node:path";
 import { decodeWavPcm } from "../src/dsp/wav.js";
 import { mixToMono } from "../src/dsp/mono.js";
-import { analyzeStem } from "../src/dsp/analyze.js";
+import { analyzeChannels } from "../src/dsp/analyze.js";
+import { balanceLoudness, anchorFaders } from "../src/dsp/balance.js";
+import { guessRole, DEFAULT_ROLE_OFFSETS } from "../src/dsp/roles.js";
 import { deriveCurves, knobDefaults, perTrackDefaults } from "../src/dsp/model.js";
 import { evaluateCurves, erbFrameEnergies, smrReport } from "../src/dsp/metrics.js";
 
@@ -35,7 +37,7 @@ export const PRESETS = {
 };
 
 function parseArgs(argv) {
-  const opts = { inputs: [], presets: Object.keys(PRESETS), limit: Infinity, postFader: false, balance: "rms", rendered: null, json: null, md: false };
+  const opts = { inputs: [], presets: Object.keys(PRESETS), limit: Infinity, postFader: false, balance: "lufs", rendered: null, json: null, md: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--presets") opts.presets = argv[++i].split(",");
@@ -66,7 +68,7 @@ function listWavs(inputs) {
 export function loadStem(path) {
   const buf = readFileSync(path);
   const pcm = decodeWavPcm(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-  return { name: basename(path), sampleRate: pcm.sampleRate, mono: mixToMono(pcm.channels) };
+  return { name: basename(path), sampleRate: pcm.sampleRate, channels: pcm.channels, mono: mixToMono(pcm.channels) };
 }
 
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
@@ -88,12 +90,16 @@ export function activeRmsDb(mono, analysis) {
 }
 
 export function balanceFaders(stems, analyses, mode, targetDb = -20) {
+  if (mode === "lufs") {
+    const auto = balanceLoudness(analyses.map((a, i) => ({ lufs: a.lufs, role: guessRole(stems[i].name) })), { targetLufs: -23, offsets: DEFAULT_ROLE_OFFSETS });
+    return anchorFaders(auto).faders;
+  }
   if (mode !== "rms") return stems.map(() => 0);
   return stems.map((s, i) => targetDb - activeRmsDb(s.mono, analyses[i]));
 }
 
-export function evaluateSet(stems, { presets, balance = "rms" }) {
-  const analyses = stems.map((s) => analyzeStem(s.mono, s.sampleRate));
+export function evaluateSet(stems, { presets, balance = "lufs" }) {
+  const analyses = stems.map((s) => analyzeChannels(s.channels, s.sampleRate));
   const faders = balanceFaders(stems, analyses, balance);
   const rows = [];
   for (const name of presets) {
@@ -151,6 +157,7 @@ async function main() {
   console.error(`loaded ${stems.length} stems in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   const { analyses, rows, faders } = evaluateSet(stems, opts);
   console.error(`balance ${opts.balance}: faders ${faders.map((f) => f.toFixed(1)).join(", ")} dB`);
+  if (opts.balance === "lufs") console.error(`roles: ${stems.map((s, i) => `${s.name.replace(/\.[^.]+$/, "")}=${guessRole(s.name)} (${analyses[i].lufs.toFixed(1)} LUFS)`).join(", ")}`);
   console.error(`analysed and scored ${opts.presets.length} presets in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   console.log(table(rows, opts.md));
   const ref = rows.find((r) => r.preset === "defaults") || rows[0];
