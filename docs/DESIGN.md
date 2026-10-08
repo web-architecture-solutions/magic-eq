@@ -435,8 +435,28 @@ weighting is what the bias was compensating for by hand.
 
 Headroom is predicted without rendering from per-frame peaks: a coherent
 sum (upper bound) and a root-sum-square (uncorrelated estimate); the master
-trim suggestion aims the bound at −6 dBFS, and the live master meter is
-the truth.
+trim suggestion aims the bound at the peak target (−6 dBFS by default,
+editable), and the live master meter is the truth.
+
+Listening is loudness-matched separately from the mix. Balancing anchors
+the loudest fader at 0 dB, so a balanced session plays 8 to 12 LU quieter
+than the raw stems summed at unity, and unmatched A/B makes the louder
+condition win. The transport therefore plays three conditions (raw stems,
+balanced faders, faders plus EQ) through a monitor gain after the master
+trim that brings each to one listening level. The loudness of each
+condition is predicted, not rendered (`src/dsp/mixLoudness.js`): each
+stem's integrated loudness plus its fader and make-up, plus the change in
+its K-weighted power from the exact magnitude response of its peaking and
+high-pass filters (the RBJ forms Web Audio implements, checked against
+`getFrequencyResponse` to 0.001 dB) weighted by its long-term ERB
+spectrum, summed as uncorrelated powers. On synthetic uncorrelated stems
+the prediction is within 0.03 LU of the rendered mix. On fourteen Human
+Radio stems with several mics per source, the absolute error is up to
+0.2 LU, the raw-to-balanced difference is off by 0.3 LU, and EQ-to-balanced
+by 0.03 LU or less: correlation between mics shifts every condition almost
+equally. The monitor gain is never exported. The listening page uses
+measured BS.1770 loudness of the rendered loop instead (it renders
+anyway).
 
 The overlay at the top of the Mix workspace draws every stem's long-term
 ERB spectrum at mix level with an overlap strip (stems within 6 dB of the

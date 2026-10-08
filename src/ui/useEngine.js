@@ -4,7 +4,7 @@ import { LiveEngine } from "../audio/engine.js";
 
 // Owns the live AudioContext and LiveEngine. Rebuilds the graph when the set
 // of ready stems or the session rate changes; pushes specs on every change.
-export function useEngine({ readyStems, sessionRate, specs, masterTrimDb = 0 }) {
+export function useEngine({ readyStems, sessionRate, specs, masterTrimDb = 0, monitorDb = 0 }) {
   const engineRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -63,7 +63,13 @@ export function useEngine({ readyStems, sessionRate, specs, masterTrimDb = 0 }) 
     engineRef.current?.setMasterTrimDb(masterTrimDb);
   }, [masterTrimDb, readyKey]);
 
+  useEffect(() => {
+    engineRef.current?.setMonitorDb(monitorDb);
+  }, [monitorDb, readyKey]);
+
   useEffect(() => () => engineRef.current?.dispose(), []);
+
+  const resetLoudness = useCallback(() => engineRef.current?.resetLoudness(), []);
 
   const play = useCallback(async () => {
     const engine = engineRef.current;
@@ -85,5 +91,5 @@ export function useEngine({ readyStems, sessionRate, specs, masterTrimDb = 0 }) 
 
   const toggle = useCallback(() => (playing ? stop() : play()), [playing, play, stop]);
 
-  return { playing, position, duration, meters, play, stop, seek, toggle };
+  return { playing, position, duration, meters, play, stop, seek, toggle, resetLoudness };
 }

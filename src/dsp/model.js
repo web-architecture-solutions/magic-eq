@@ -54,6 +54,7 @@ export const DEFAULT_KNOBS = Object.freeze({
   gateEnabled: true,
   postFader: false,
   loudnessMatch: true,
+  peakTargetDb: -6, // Gain workspace: where "aim" puts the predicted mix peak (dBFS)
 });
 
 export const DEFAULT_PER_TRACK = Object.freeze({

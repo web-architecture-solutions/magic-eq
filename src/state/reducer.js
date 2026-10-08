@@ -10,7 +10,10 @@ export const initialState = {
   knobs: knobDefaults(),
   pairById: {}, // { [sourceId]: { [targetId]: weight } }
   sessionRate: null,
-  mixBypass: false,
+  // Listening: which condition plays (raw stems, balanced faders, or with
+  // EQ) and whether conditions are loudness-matched at the listening level.
+  // Monitoring only: never exported.
+  compare: { condition: "eq", match: true, listenLufs: -20 },
   masterTrimDb: 0,
   lastBalance: null, // { method, shiftDb, at }
   exportState: { status: "idle", progress: null, files: [], error: null, evaluation: null },
@@ -134,8 +137,8 @@ export function reducer(state, action) {
       else row[action.target] = action.value;
       return { ...state, pairById: { ...state.pairById, [action.source]: row } };
     }
-    case "SET_MIX_BYPASS":
-      return { ...state, mixBypass: action.value };
+    case "SET_COMPARE":
+      return { ...state, compare: { ...state.compare, ...action.patch } };
     case "SET_MASTER_TRIM":
       return { ...state, masterTrimDb: action.value };
     case "BALANCE": {

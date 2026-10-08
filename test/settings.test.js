@@ -8,6 +8,11 @@ function fakeStorage() {
 }
 
 describe("settings persistence", () => {
+  it("persists the peak target within 0 to -24 dBFS", () => {
+    expect(parseSettings(serializeSettings(knobDefaults({ peakTargetDb: 0 })))).toEqual({ peakTargetDb: 0 });
+    expect(parseSettings(JSON.stringify({ version: 1, settings: { peakTargetDb: 3 } }))).toEqual({});
+  });
+
   it("stores only settings keys that differ from the defaults", () => {
     const knobs = knobDefaults({ D: 18, carveDb: 9, faders: [1] });
     expect(diffSettings(knobs)).toEqual({ D: 18 });

@@ -3,13 +3,16 @@ import { renderMix } from "../audio/render.js";
 import { decodeStemFile } from "../audio/decode.js";
 import { getLiveContext } from "../audio/context.js";
 import { downloadBlob } from "../audio/exportAll.js";
+import { integratedLoudness } from "../dsp/loudness.js";
 
 // Hidden-identity, loudness-matched comparison of conditions over a loop.
-// Built-in conditions: Bypass (hidden reference) and the current settings.
-// External renders (mixes of the same stems from any other tool) can be
-// added as further conditions, so the comparison is apples to apples.
+// Built-in conditions: the raw stems, the balanced faders without EQ, and
+// both EQ models (Magic and Literature) on those faders. External renders
+// (mixes of the same stems from any other tool) can be added as further
+// conditions, so the comparison is apples to apples. Every condition is
+// matched to the same integrated loudness (BS.1770) over the loop.
 
-const TARGET_RMS_DB = -20;
+const TARGET_LUFS = -20;
 const SCALES = [
   ["separation", "Separation: how clearly the parts read as distinct"],
   ["naturalness", "Naturalness: free of processing artefacts, tonal shifts, pumping"],
@@ -28,16 +31,14 @@ function sliceBuffer(buffer, startSec, lenSec) {
   return out;
 }
 
-function rmsDb(buffer) {
-  let acc = 0;
-  let n = 0;
-  const tmp = new Float32Array(buffer.length);
+function loudnessOf(buffer) {
+  const channels = [];
   for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const tmp = new Float32Array(buffer.length);
     buffer.copyFromChannel(tmp, c);
-    for (let i = 0; i < tmp.length; i++) acc += tmp[i] * tmp[i];
-    n += tmp.length;
+    channels.push(tmp);
   }
-  return n > 0 && acc > 0 ? 10 * Math.log10(acc / n) : -120;
+  return integratedLoudness(channels, buffer.sampleRate).lufs;
 }
 
 function shuffle(arr) {
@@ -49,7 +50,7 @@ function shuffle(arr) {
   return a;
 }
 
-export default function ListeningTest({ stems, specs, timelines, curves, sessionRate, knobsLabel }) {
+export default function ListeningTest({ stems, buildFlow, sessionRate }) {
   const ready = stems.filter((s) => s.status === "ready");
   const duration = ready.reduce((m, s) => Math.max(m, s.durationSec), 0);
   const [start, setStart] = useState(0);
@@ -85,29 +86,37 @@ export default function ListeningTest({ stems, specs, timelines, curves, session
     stopAll();
     setRevealed(false);
     setRatings({});
-    setStatus("Rendering bypass…");
     const idx = ready.map((s) => stems.indexOf(s));
-    const bypassSpecs = idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: 0, gains: new Float64Array(16) }));
-    const bypass = await renderMix(ready, bypassSpecs, null, sessionRate);
-    setStatus("Rendering current settings…");
-    const curSpecs = idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i] }));
-    const curTl = idx.map((i) => timelines[i]);
-    const cur = await renderMix(ready, curSpecs, curTl, sessionRate);
-    const list = [
-      { id: "bypass", name: "Bypass (reference)", buffer: sliceBuffer(bypass, start, length) },
-      { id: "current", name: `Current settings (${knobsLabel})`, buffer: sliceBuffer(cur, start, length) },
+    const win = { startSec: start, lengthSec: length };
+    const flat = new Float64Array(16);
+    const magic = buildFlow("magic");
+    const lit = buildFlow("lit");
+    const eqSpecs = ({ curves }) => idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i], q: curves.bandQ || 0, hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0 }));
+    const plan = [
+      ["raw", "Raw stems (every fader at 0 dB, no EQ)", idx.map(() => ({ faderDb: 0, makeupDb: 0, gains: flat })), null],
+      ["balanced", "Balanced faders, no EQ", idx.map((i) => ({ faderDb: magic.curves.faders[i], makeupDb: 0, gains: flat })), null],
+      ["magic", "Balanced + Magic EQ", eqSpecs(magic), idx.map((i) => magic.timelines[i])],
+      ["lit", "Balanced + Literature EQ", eqSpecs(lit), idx.map((i) => lit.timelines[i])],
     ];
+    const list = [];
+    for (const [id, name, specs, tl] of plan) {
+      setStatus(`Rendering ${name.toLowerCase()}…`);
+      list.push({ id, name, buffer: await renderMix(ready, specs, tl, sessionRate, win) });
+    }
     for (const ex of externals) {
       setStatus(`Decoding ${ex.name}…`);
       const d = await decodeStemFile(ex.file, sessionRate);
       list.push({ id: `ext:${ex.name}`, name: ex.name, buffer: sliceBuffer(d.buffer, start, length) });
     }
-    for (const c of list) c.gain = Math.pow(10, (TARGET_RMS_DB - rmsDb(c.buffer)) / 20);
+    for (const c of list) {
+      c.lufs = loudnessOf(c.buffer);
+      c.gain = Number.isFinite(c.lufs) ? Math.pow(10, (TARGET_LUFS - c.lufs) / 20) : 1;
+    }
     setConditions(list);
     setOrder(shuffle(list.map((c) => c.id)));
     setCurrent(null);
-    setStatus(`${list.length} conditions ready, loudness-matched to ${TARGET_RMS_DB} dBFS RMS over ${length.toFixed(0)} s from ${start.toFixed(0)} s.`);
-  }, [ready, stems, curves, timelines, sessionRate, externals, start, length, knobsLabel, stopAll]);
+    setStatus(`${list.length} conditions ready, loudness-matched to ${TARGET_LUFS} LUFS (BS.1770) over ${length.toFixed(0)} s from ${start.toFixed(0)} s.`);
+  }, [ready, stems, buildFlow, sessionRate, externals, start, length, stopAll]);
 
   const play = useCallback(
     async (id) => {
@@ -143,7 +152,7 @@ export default function ListeningTest({ stems, specs, timelines, curves, session
     const payload = {
       createdAt: new Date().toISOString(),
       region: { start, length },
-      conditions: conditions.map((c) => ({ id: c.id, name: c.name, matchGainDb: 20 * Math.log10(c.gain) })),
+      conditions: conditions.map((c) => ({ id: c.id, name: c.name, lufs: c.lufs, matchGainDb: 20 * Math.log10(c.gain) })),
       mapping: letters,
       ratings,
     };
@@ -154,7 +163,7 @@ export default function ListeningTest({ stems, specs, timelines, curves, session
   return (
     <div className="listen">
       <p className="hint">
-        Blind, loudness-matched comparison over a loop. Conditions are shuffled and labelled by letter; identities are revealed only when you ask. Add mixes rendered by other tools from the same stems to compare them on equal terms.
+        Blind comparison over a loop of the raw stems, the balanced faders, and both EQ models, every one matched to the same integrated loudness. Conditions are shuffled and labelled by letter; identities are revealed only when you ask. Add mixes rendered by other tools from the same stems to compare them on equal terms.
       </p>
       <div className="listen-setup">
         <label className="slider">
@@ -249,7 +258,7 @@ export default function ListeningTest({ stems, specs, timelines, curves, session
             <ul className="hint">
               {means.map((c) => (
                 <li key={c.id}>
-                  {c.name}: {SCALES.map(([k]) => `${k} ${ratings[c.id]?.[k] ?? "–"}`).join(", ")} · match gain {(20 * Math.log10(c.gain)).toFixed(1)} dB
+                  {c.name}: {SCALES.map(([k]) => `${k} ${ratings[c.id]?.[k] ?? "–"}`).join(", ")} · {Number.isFinite(c.lufs) ? `${c.lufs.toFixed(1)} LUFS before matching, ` : ""}match gain {(20 * Math.log10(c.gain)).toFixed(1)} dB
                 </li>
               ))}
             </ul>

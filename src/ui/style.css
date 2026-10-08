@@ -253,3 +253,14 @@ table.ratings td input[type="range"] { width: 70%; vertical-align: middle; }
 .lit-notes ul { padding-left: 16px; margin: 4px 0; }
 .view-advanced .side .lit { grid-template-columns: 1fr; padding: 0 0 8px; border-top: none; }
 .view-advanced .side .lit .slider { grid-template-columns: 150px 1fr 56px; }
+
+/* listening comparison */
+.transport .compare { margin-left: 4px; }
+.transport .match { white-space: nowrap; }
+.transport .listen-lufs { width: 52px; }
+.transport .loudness { font-variant-numeric: tabular-nums; color: var(--text-secondary); min-width: 84px; white-space: nowrap; }
+.transport .loudness.warn { color: #f0a0a0; }
+.headroom { flex-wrap: wrap; }
+.peak-target { display: inline-flex; align-items: center; gap: 4px; }
+.peak-target input { width: 52px; }
+.gain-master > .hint { grid-column: 1 / -1; }

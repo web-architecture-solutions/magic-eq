@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { reducer, initialState, initState, newStem, pairArray, effectiveMuted, stemFaderDb } from "./state/reducer.js";
 import { balanceLoudness, balancePeakBand, balancePinkReference, anchorFaders, predictMixPeak, masterTrimFor } from "./dsp/balance.js";
 import { DEFAULT_ROLE_OFFSETS } from "./dsp/roles.js";
+import { predictConditions, conditionSpecs, monitorGainDb } from "./dsp/mixLoudness.js";
 import GainView from "./ui/GainView.jsx";
 import OverlaySpectrum from "./ui/OverlaySpectrum.jsx";
 import { stemColor } from "./ui/palette.js";
@@ -40,7 +41,7 @@ const BYTES_PER_SAMPLE = 4;
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, undefined, () => initState(loadSettings()));
-  const { stems, knobs, pairById, sessionRate, mixBypass, exportState, masterTrimDb, lastBalance } = state;
+  const { stems, knobs, pairById, sessionRate, compare, exportState, masterTrimDb, lastBalance } = state;
   const [workspace, setWorkspace] = useState("gain");
   const [tab, setTab] = useState("mix");
   const [hoverId, setHoverId] = useState(null);
@@ -131,7 +132,8 @@ export default function App() {
   const timelines = useMemo(() => buildGainTimelines(curves, analyses, timelineKnobs, perTrack), [curves, analyses, timelineKnobs, perTrack]);
   const muted = useMemo(() => effectiveMuted(stems), [stems]);
   const readyStems = useMemo(() => stems.filter((s) => s.status === "ready"), [stems]);
-  const specs = useMemo(
+  // The mix with EQ (the active flow), per ready stem.
+  const eqSpecs = useMemo(
     () =>
       stems
         .map((s, i) => ({
@@ -140,16 +142,62 @@ export default function App() {
           makeupDb: curves.makeupDb[i],
           gains: curves.G[i],
           timeline: timelines[i],
-          bypass: s.bypass || mixBypass,
+          bypass: s.bypass,
           muted: muted[i],
           q: curves.bandQ || 0,
           hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0,
         }))
         .filter((_, i) => stems[i].status === "ready"),
-    [stems, curves, timelines, mixBypass, muted]
+    [stems, curves, timelines, muted]
   );
+  // What plays: raw stems, balanced faders, or the mix with EQ.
+  const specs = useMemo(() => conditionSpecs(eqSpecs, compare.condition), [eqSpecs, compare.condition]);
 
-  const engine = useEngine({ readyStems, sessionRate, specs, masterTrimDb });
+  // Loudness matching: predicted mix loudness of every condition, and the
+  // monitor gain that puts the playing one at the listening level.
+  const prediction = useMemo(() => {
+    if (!sessionRate || readyStems.length === 0) return null;
+    const info = readyStems.map((s) => ({ lufs: s.analysis?.lufs, erbMeanDb: s.analysis?.erb?.meanDb }));
+    return predictConditions(info, eqSpecs, sessionRate);
+  }, [readyStems, eqSpecs, sessionRate]);
+  const monitorDb = compare.match && prediction ? monitorGainDb(prediction.loudness[compare.condition], compare.listenLufs, masterTrimDb) : 0;
+  // Predicted peak of what plays, at the monitor: a clip warning.
+  const monitorPeak = useMemo(() => {
+    if (!prediction) return null;
+    const items = readyStems
+      .map((s, i) => ({ s, spec: specs[i], delta: prediction.deltas[i] }))
+      .filter(({ s, spec }) => s.analysis?.framePeaksDb && !spec.muted)
+      .map(({ s, spec, delta }) => ({ framePeaksDb: s.analysis.framePeaksDb, faderDb: spec.faderDb + (spec.bypass ? 0 : delta) + masterTrimDb + monitorDb }));
+    return items.length ? predictMixPeak(items) : null;
+  }, [prediction, readyStems, specs, masterTrimDb, monitorDb]);
+
+  const engine = useEngine({ readyStems, sessionRate, specs, masterTrimDb, monitorDb });
+  const { resetLoudness } = engine;
+  useEffect(() => {
+    resetLoudness();
+  }, [compare.condition, compare.match, knobs.flow, resetLoudness]);
+  const setCompare = useCallback((patch) => dispatch({ type: "SET_COMPARE", patch }), []);
+
+  // Keys: 1 raw, 2 balanced, 3 with EQ, space play/stop.
+  const toggleRef = useRef(engine.toggle);
+  toggleRef.current = engine.toggle;
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      const typing = t && (t.isContentEditable || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || (t.tagName === "INPUT" && !["range", "checkbox", "radio", "button"].includes(t.type)));
+      if (e.metaKey || e.ctrlKey || e.altKey || typing) return;
+      const cond = { 1: "raw", 2: "balanced", 3: "eq" }[e.key];
+      if (cond) {
+        dispatch({ type: "SET_COMPARE", patch: { condition: cond } });
+        e.preventDefault();
+      } else if (e.key === " " && !(t && (t.tagName === "BUTTON" || (t.tagName === "INPUT" && t.type !== "range")))) {
+        toggleRef.current?.();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const allReady = stems.length > 0 && stems.every((s) => s.status === "ready");
 
   const onBalance = useCallback(() => {
@@ -168,8 +216,8 @@ export default function App() {
     const items = stems.filter((s) => s.status === "ready" && s.analysis?.framePeaksDb).map((s, i) => ({ framePeaksDb: s.analysis.framePeaksDb, faderDb: knobs.postFader ? 0 : stemFaderDb(s) }));
     if (items.length === 0) return null;
     const p = predictMixPeak(items);
-    return { ...p, suggestedTrimDb: masterTrimFor(p.upperDb, -6) };
-  }, [stems, knobs.postFader]);
+    return { ...p, suggestedTrimDb: masterTrimFor(p.upperDb, knobs.peakTargetDb ?? -6) };
+  }, [stems, knobs.postFader, knobs.peakTargetDb]);
 
   // Instantaneous gated cut per stem while playing, for the plot overlay.
   const liveG = useMemo(() => {
@@ -207,8 +255,19 @@ export default function App() {
 
   const memoryMb = stems.reduce((acc, s) => acc + (s.length || 0) * (s.channels || 0) * BYTES_PER_SAMPLE, 0) / 1048576;
 
+  // Curves and timelines for either flow, for the listening page.
+  const buildFlow = useCallback(
+    (flow) => {
+      const k = { ...modelKnobs, flow };
+      const c = flow === "lit" ? deriveLitCurves(analyses, faderDb, perTrack, k, roles) : deriveCurves(analyses, faderDb, perTrack, k);
+      const tl = buildGainTimelines(c, analyses, flow === "lit" ? { ...k, gateEnabled: false } : k, perTrack);
+      return { curves: c, timelines: tl };
+    },
+    [modelKnobs, analyses, faderDb, perTrack, roles]
+  );
+
   useEffect(() => {
-    window.__magicEq = { state, curves, timelines, specs, dispatch, setTab, setWorkspace, headroom };
+    window.__magicEq = { state, curves, timelines, specs, eqSpecs, prediction, monitorDb, dispatch, setTab, setWorkspace, headroom, engine };
   });
 
   const cards = (advanced) =>
@@ -299,14 +358,24 @@ export default function App() {
             ⚙
           </button>
         </nav>
-        <Transport engine={engine} canPlay={readyStems.length > 0} mixBypass={mixBypass} onMixBypass={(v) => dispatch({ type: "SET_MIX_BYPASS", value: v })} masking={readyStems.length > 1 ? curves.masking : null} />
+        <Transport
+          engine={engine}
+          canPlay={readyStems.length > 0}
+          compare={compare}
+          onCompare={setCompare}
+          flowLabel={knobs.flow === "lit" ? "Literature" : "Magic"}
+          prediction={prediction}
+          monitorDb={monitorDb}
+          monitorPeak={monitorPeak}
+          masking={readyStems.length > 1 ? curves.masking : null}
+        />
         {workspace === "mix" && tab === "mix" ? knobs.flow === "lit" ? <LitPanel knobs={knobs} dispatch={dispatch} curves={curves} /> : <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} /> : null}
       </div>
 
       <main className={`view view-${workspace === "gain" ? "gain" : tab}`}>
         {stems.length === 0 ? <DropZone onFiles={addFiles} /> : null}
         {workspace === "gain" ? (
-          <GainView stems={stems} knobs={knobs} dispatch={dispatch} meters={engine.meters} muted={muted} onBalance={onBalance} headroom={headroom} masterTrimDb={masterTrimDb} lastBalance={lastBalance} allReady={allReady} />
+          <GainView stems={stems} knobs={knobs} dispatch={dispatch} meters={engine.meters} muted={muted} onBalance={onBalance} headroom={headroom} masterTrimDb={masterTrimDb} lastBalance={lastBalance} allReady={allReady} compare={compare} />
         ) : null}
         {workspace === "mix" && (tab === "mix" || tab === "advanced") ? overlay : null}
         {workspace === "mix" && tab === "mix" ? <div className="stems">{cards(false)}</div> : null}
@@ -321,7 +390,7 @@ export default function App() {
         ) : null}
         {workspace === "mix" && tab === "matrix" ? <MatrixView stems={stems} curves={curves} pairById={pairById} dispatch={dispatch} knobs={knobs} /> : null}
         {workspace === "mix" && tab === "listen" ? (
-          <ListeningTest stems={stems} specs={specs} timelines={timelines} curves={curves} sessionRate={sessionRate} knobsLabel={`depth ${knobs.carveDb} · peak taming ${knobs.levelDb} · valley cut ${knobs.scoopDb}`} />
+          <ListeningTest stems={stems} buildFlow={buildFlow} sessionRate={sessionRate} />
         ) : null}
       </main>
 

@@ -13,16 +13,21 @@ export async function renderStem(buffer, spec, timeline) {
   return rendered;
 }
 
-// Render all stems summed to stereo at a common rate.
-export async function renderMix(stems, specs, timelines, sampleRate) {
-  let length = 0;
-  for (const s of stems) length = Math.max(length, s.buffer.length);
+// Render all stems summed to stereo at a common rate. With a window, only
+// [startSec, startSec + lengthSec) is rendered, automation included.
+export async function renderMix(stems, specs, timelines, sampleRate, window = null) {
+  let full = 0;
+  for (const s of stems) full = Math.max(full, s.buffer.length);
+  const startSec = window ? Math.max(0, window.startSec) : 0;
+  const first = Math.min(full - 1, Math.floor(startSec * sampleRate));
+  const length = window ? Math.max(1, Math.min(full - first, Math.floor(window.lengthSec * sampleRate))) : full;
+  const offset = first / sampleRate;
   const offline = new OfflineAudioContext(2, length, sampleRate);
   const chains = stems.map((s, i) => {
     const chain = buildStemChain(offline, s.buffer, { ...specs[i], bypass: false, muted: false });
     chain.out.connect(offline.destination);
-    chain.start(0, 0);
-    if (timelines?.[i]) chain.schedule(timelines[i], 0, 0);
+    chain.start(0, offset);
+    if (timelines?.[i]) chain.schedule(timelines[i], -offset, offset);
     else chain.setGains(specs[i].gains, true);
     return chain;
   });

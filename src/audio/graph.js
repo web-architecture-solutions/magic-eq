@@ -1,6 +1,7 @@
 import { bandCentres, BAND_Q, NUM_BANDS } from "../dsp/bands.js";
 import { timelineValueAt } from "../dsp/timeline.js";
 import { dbToGain } from "./context.js";
+import { HPF_Q_WEBAUDIO_DB } from "../dsp/mixLoudness.js";
 
 const SMOOTH = 0.02;
 
@@ -24,7 +25,8 @@ export function buildStemChain(ctx, buffer, spec) {
   const centres = bandCentres();
   const hpf = ctx.createBiquadFilter();
   hpf.type = "highpass";
-  hpf.Q.value = 0.7071;
+  // Web Audio takes a high-pass Q in dB: -3.01 dB is Butterworth (Q 0.7071).
+  hpf.Q.value = HPF_Q_WEBAUDIO_DB;
   hpf.frequency.value = 10;
   fader.connect(hpf);
   const biquads = [];

@@ -36,7 +36,7 @@ all editable in Settings), then shifts everything so the loudest fader
 lands at 0 dB: nothing is ever boosted. Trims survive a re-balance. The
 master row predicts the mix peak from the stems' per-frame peaks (a
 coherent-sum bound and an uncorrelated estimate) and offers a master trim
-that aims it at −6 dBFS. Two alternative methods exist for comparison: a
+that aims it at a peak target (−6 dBFS by default, editable down to 0). Two alternative methods exist for comparison: a
 peak-band rule, and a pink reference that reproduces the manual
 pink-noise trick on per-frame ERB spectra, bias included.
 
@@ -58,9 +58,19 @@ each band. Its sub-views are Simple, Advanced, Matrix and Listen.
    is a contrast in dB: the part of a stem's cut that would be the same in every
    audible band is removed (make-up gain would cancel it anyway), so each knob
    keeps doing something across its whole range, however many stems you load.
-4. **A/B.** *Byp* on a stem, or *Bypass all*, is loudness-matched so the louder
-   side doesn't win by default. Each stem shows its *effect* (contrast actually
-   applied, in dB) and the *overlap* readout is a crude masking score.
+4. **A/B.** The transport switches what plays: **Raw** (every stem at 0 dB,
+   no EQ, the session as tracked), **Balanced** (the Gain workspace's faders,
+   no EQ) and **EQ** (faders plus the active model). Keys 1, 2 and 3 switch,
+   space plays. With *match* on, every condition plays at the same
+   integrated loudness (−20 LUFS by default) through a monitor gain after
+   the master, so louder never wins by default and gain staging can be
+   heard on its own. The loudness of each condition is predicted from the
+   analysis (each stem's BS.1770 loudness, fader, make-up, and the exact
+   response of its filters on its long-term spectrum), so switching is
+   instant; the readout beside it is the measured short-term loudness of
+   what you hear. The monitor gain never reaches the export. *Byp* on a
+   stem is loudness-matched by its make-up. The *overlap* readout is a
+   crude masking score.
 5. **Export.** Each stem is rendered through its EQ (including the activity
    following) at its source level, the mix at fader level, and `recipe.json`
    holds the per-band gains, the gate transitions, and the sparse automation.
@@ -71,7 +81,8 @@ to see that knob's share of every stem's cut; the cut bars are stacked by term.
 **Advanced** adds per-stem multipliers, band locks, the full model knobs, the
 gate settings, and a description of every control. **Matrix** shows who carves
 whom (colour) with the editable per-pair weights and the row/column scalars.
-**Listen** is a blind, loudness-matched comparison over a loop, with external
+**Listen** is a blind comparison over a loop of the raw stems, the balanced
+faders and both EQ models, each matched to the same BS.1770 loudness, with external
 renders of the same stems as extra conditions. Hover any control for what it
 does and what it interacts with. The gear in the nav opens **Settings**: how
 the model is configured (stem drive, coupling, combine mode, psychoacoustic

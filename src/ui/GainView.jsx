@@ -5,13 +5,13 @@ import { stemColor } from "./palette.js";
 
 const fmtDb = (v, d = 1) => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(d)}` : "–");
 
-function Meter({ rmsDb, peakDb, floor = -60 }) {
+function Meter({ rmsDb, peakDb, floor = -60, markDb = -6 }) {
   const w = (db) => `${Math.max(0, Math.min(100, ((db - floor) / -floor) * 100)).toFixed(1)}%`;
   return (
     <div className="meter" title={rmsDb != null ? `RMS ${rmsDb.toFixed(1)} dBFS, peak ${peakDb.toFixed(1)} dBFS (mono average)` : "plays to show levels"}>
       <div className="meter-rms" style={{ width: rmsDb != null ? w(rmsDb) : 0 }} />
       <div className="meter-peak" style={{ left: peakDb != null ? w(peakDb) : 0, opacity: peakDb != null ? 1 : 0 }} />
-      <div className="meter-zero" style={{ left: w(-6) }} />
+      <div className="meter-zero" style={{ left: w(markDb) }} />
     </div>
   );
 }
@@ -57,9 +57,10 @@ function FaderStrip({ stem, index, meter, knobs, dispatch, muted }) {
   );
 }
 
-export default function GainView({ stems, knobs, dispatch, meters, muted, onBalance, headroom, masterTrimDb, lastBalance, allReady }) {
+export default function GainView({ stems, knobs, dispatch, meters, muted, onBalance, headroom, masterTrimDb, lastBalance, allReady, compare }) {
   const method = knobs.balanceMethod || "loudness";
   const suggestion = headroom?.suggestedTrimDb ?? 0;
+  const target = knobs.peakTargetDb ?? -6;
   return (
     <div className="gain">
       <div className="gain-toolbar">
@@ -88,15 +89,35 @@ export default function GainView({ stems, knobs, dispatch, meters, muted, onBala
       <div className="gain-master">
         <div className="headroom" title="Predicted mix peak from the stems' per-frame peaks at the current faders: coherent sum (upper bound) and root-sum-square (uncorrelated estimate). The live meter during playback is the truth.">
           <span>predicted peak {headroom ? `${fmtDb(headroom.upperDb)} (bound) · ${fmtDb(headroom.rssDb)} (est.)` : "–"} dBFS</span>
-          <button type="button" disabled={!headroom || Math.abs(suggestion - masterTrimDb) < 0.05} onClick={() => dispatch({ type: "SET_MASTER_TRIM", value: suggestion })} title="Set the master trim so the predicted peak sits at -6 dBFS">
-            aim at −6 ({fmtDb(suggestion)})
+          <label className="peak-target" title="Where the aim button puts the predicted mix peak (coherent bound). -6 dBFS leaves room for later processing; 0 uses the full scale.">
+            peak target
+            <input
+              type="number"
+              min={-24}
+              max={0}
+              step={1}
+              value={target}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (Number.isFinite(v)) dispatch({ type: "SET_KNOB", key: "peakTargetDb", value: Math.max(-24, Math.min(0, v)) });
+              }}
+            />
+            dBFS
+          </label>
+          <button type="button" disabled={!headroom || Math.abs(suggestion - masterTrimDb) < 0.05} onClick={() => dispatch({ type: "SET_MASTER_TRIM", value: suggestion })} title={`Set the master trim so the predicted peak sits at ${target} dBFS`}>
+            aim ({fmtDb(suggestion)})
           </button>
         </div>
         <Slider k="masterTrimDb" value={masterTrimDb} min={-24} max={6} step={0.5} onChange={(v) => dispatch({ type: "SET_MASTER_TRIM", value: v })} />
         <div className="master-meter">
           <span className="slider-label">master</span>
-          <Meter rmsDb={meters?.master?.rmsDb ?? null} peakDb={meters?.master?.peakDb ?? null} />
+          <Meter rmsDb={meters?.master?.rmsDb ?? null} peakDb={meters?.master?.peakDb ?? null} markDb={target} />
         </div>
+        {compare?.match ? (
+          <span className="hint" title="The transport's match plays every condition (raw, balanced, with EQ) at the same loudness through a monitor gain after the master trim.">
+            listening is loudness-matched at {compare.listenLufs} LUFS: the master trim changes the export, not what you hear
+          </span>
+        ) : null}
       </div>
       <div className="strips">
         {stems.map((s, i) => (
