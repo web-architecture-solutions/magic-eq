@@ -15,7 +15,8 @@ function fmt(f) {
 // Two stacked panels on one SVG: the stem's spectrum (bars, dB relative to
 // its own peak) with its mode envelope, and the derived cut per band. `live`
 // (optional) is the instantaneous gated cut during playback, drawn lighter.
-export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, knee = 0.25, audible }) {
+export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, knee = 0.25, audible, termLabels }) {
+  const tl = termLabels || { cross: "depth", level: "peak taming", scoop: "valley cut" };
   const centres = bandCentres();
   const plotW = W - PAD_L - PAD_R;
   const bw = plotW / NUM_BANDS;
@@ -78,7 +79,7 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
             acc += t * scale;
             return [name, from, acc];
           });
-          const detail = terms ? ` (depth ${(terms.cross?.[b] ?? 0).toFixed(2)}, peak taming ${(terms.level?.[b] ?? 0).toFixed(2)}, valley cut ${(terms.scoop?.[b] ?? 0).toFixed(2)})` : "";
+          const detail = terms ? ` (${tl.cross} ${(terms.cross?.[b] ?? 0).toFixed(2)}, ${tl.level} ${(terms.level?.[b] ?? 0).toFixed(2)}, ${tl.scoop} ${(terms.scoop?.[b] ?? 0).toFixed(2)})` : "";
           return (
             <g key={b}>
               <rect x={PAD_L + b * bw + 1} y={top2} width={bw - 2} height={Math.max(0, y)} className="bar-cut-hit" rx={2}>
@@ -103,7 +104,10 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
         <tspan className="sw-spec">■</tspan> spectrum (dB rel. peak) <tspan className="sw-env">—</tspan> modes
       </text>
       <text x={W - PAD_R} y={H1 + 12} className="legend" textAnchor="end">
-        <tspan className="sw-cross">■</tspan> depth <tspan className="sw-level">■</tspan> peak taming <tspan className="sw-scoop">■</tspan> valley cut{live ? " " : ""}
+        <tspan className="sw-cross">■</tspan> {tl.cross} <tspan className="sw-level">■</tspan> {tl.level}
+        {tl.scoop ? <tspan className="sw-scoop"> ■</tspan> : null}
+        {tl.scoop ? ` ${tl.scoop}` : ""}
+        {live ? " " : ""}
         {live ? <tspan className="sw-live">■</tspan> : null}
         {live ? " now" : ""}
       </text>

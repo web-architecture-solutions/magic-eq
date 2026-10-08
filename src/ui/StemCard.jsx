@@ -80,6 +80,7 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
             <span title="Cross cut that was the same in every audible band and was removed, because make-up gain would have cancelled it anyway.">flat removed {flat.toFixed(1)} dB</span>
             {ceiling ? <span className="warn" title="Audible bands whose cut is being compressed by the ceiling.">{ceiling} at ceiling</span> : null}
             <span title={titleOf("loudnessMatch")}>make-up {makeup.toFixed(1)} dB</span>
+            {curves?.hpfHz?.[index] > 0 ? <span title="High-pass by role (literature flow)">HPF {curves.hpfHz[index]} Hz</span> : null}
           </div>
           {advanced ? <MaskRow values={stem.mask} onChange={(band, value) => dispatch({ type: "SET_STEM_MASK", id: stem.id, band, value })} label="band lock" /> : null}
         </div>
@@ -94,8 +95,9 @@ export default function StemCard({ stem, index, curves, liveG, muted, knobs, dis
                 terms={curves ? { cross: curves.crossTerm?.[index], level: curves.levelTerm?.[index], scoop: curves.scoopTerm?.[index] } : null}
                 live={liveG}
                 maxCut={knobs.maxCut}
-                knee={knobs.knee}
+                knee={knobs.flow === "lit" ? 0 : knobs.knee}
                 audible={curves?.audible?.[index]}
+                termLabels={knobs.flow === "lit" ? { cross: "masking cut", level: "spectral balance", scoop: "" } : undefined}
               />
               <ActivityStrip transitions={a.gate.transitions} duration={stem.durationSec} position={position} activeFraction={a.gate.activeFraction} />
             </>

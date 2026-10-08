@@ -66,8 +66,8 @@ each band. Its sub-views are Simple, Advanced, Matrix and Listen.
    holds the per-band gains, the gate transitions, and the sparse automation.
 
 Four views: **Mix** has a preset menu, the five knobs that matter (with Knee
-next to Ceiling), and a card per stem. Hover Unmask, Flatten or Scoop to see
-that knob's share of every stem's cut; the cut bars are stacked by term.
+next to Max cut), and a card per stem. Hover Depth, Peak taming or Valley cut
+to see that knob's share of every stem's cut; the cut bars are stacked by term.
 **Advanced** adds per-stem multipliers, band locks, the full model knobs, the
 gate settings, and a description of every control. **Matrix** shows who carves
 whom (colour) with the editable per-pair weights and the row/column scalars.
@@ -82,6 +82,46 @@ Export also reports an objective masking measure (ERB-band signal-to-masker
 ratio) on the rendered audio, before and after. `docs/EVALUATION.md` explains
 it and has results on real stems; `scripts/evaluate.mjs` runs it from the
 command line over any folder of stems.
+
+## Two flows: Magic and Literature
+
+The **Magic | Literature** switch in the nav picks which model derives the
+curves. Everything else (stems, faders, the matrix, band locks, A/B, export)
+is shared, and the choice is saved with the settings.
+
+**Magic** is this tool's model: contrast-normalised cuts on the maskee where
+another stem dominates, plus the two shape terms, with activity following.
+
+**Literature** is a parallel implementation of the published cross-adaptive
+methods, as faithfully as the accessible sources allow, in three stages:
+
+1. *Masking reduction* (Hafezi & Reiss 2015, offline system): a masking
+   occurrence is a band where one stem is louder than another, the band is
+   essential for the quieter one and nonessential for the louder one. The
+   masker is cut there by the masking value; at most three occurrences per
+   track; peaking filters with Q 2; one user parameter (Amount) scales
+   everything.
+2. *Spectral balance* (Perez-Gonzalez & Reiss 2009): each stem's perceptually
+   weighted band loudness is pushed toward the cross-channel average in that
+   band. A separate system from the first, so it is a toggle, off by
+   default: on balanced stems it works against the 2015 masking measure.
+3. *High-pass by role* (De Man & Reiss 2013 rules): a high-pass on every
+   stem that is not kick, bass, drums or room.
+
+Its panel replaces the macro knobs. Every control carries a provenance tag:
+**documented** (stated in the paper or a source citing it), **inferred**
+(follows from the method, no value given) or **unverified** (our choice,
+because the full text was not accessible). Where the literature and this
+tool diverge, the divergence is a control: *Cut* masker (paper) or maskee
+(Magic's direction), *Allow boosts*, *Perceptual weighting*, *Essential
+range*, *Filters per track*, *Filter Q*, *Max cut*, *High-pass frequency*,
+and the loudness-match make-up, which is ours. The panel also shows the
+paper's own kind of measure (summed masking value over occurrences) before
+and after, and lists what is not implemented and why (Ward's partial
+loudness faders, Ronan's optimiser, the real-time frame-wise variant, free
+filter centres). The literature flow is static: activity following is off
+while it is active, and the recipe records `flow`, the filter Q and each
+stem's high-pass. `docs/DESIGN.md` §14 has the per-parameter provenance.
 
 ## Knobs
 
@@ -118,7 +158,8 @@ stem's cut; the cut bars are stacked by term.
 
 ```
 src/dsp/      pure DSP, no DOM: bands, fft, gate, envelope, analyze, model,
-              timeline, metrics, loudness (BS.1770), roles, balance, wav, recipe
+              litModel (the literature flow), timeline, metrics, loudness
+              (BS.1770), roles, balance, wav, recipe
 src/audio/    Web Audio: decode, analysis worker, shared live/offline chain
               (graph.js), live engine, offline render, export
 src/ui/       React components and the engine hook
@@ -127,7 +168,8 @@ test/         vitest over src/dsp with synthetic stems
 scripts/      fixture generator, evaluation CLI
 ```
 
-`src/ui/params.js` is the single dictionary behind every label and tooltip.
+`src/ui/params.js` is the single dictionary behind every label and tooltip;
+`src/ui/litParams.js` is the same for the literature flow, with provenance.
 
 The live chain and the offline render use the same builder, so what you hear is
 what you export. The live make-up gain is an estimate from the band spectrum;

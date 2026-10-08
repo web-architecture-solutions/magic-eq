@@ -7,6 +7,8 @@ import OverlaySpectrum from "./ui/OverlaySpectrum.jsx";
 import { stemColor } from "./ui/palette.js";
 import { loadSettings, saveSettings, isModified } from "./state/settings.js";
 import { deriveCurves } from "./dsp/model.js";
+import { deriveLitCurves } from "./dsp/litModel.js";
+import LitPanel from "./ui/LitPanel.jsx";
 import { buildGainTimelines, timelineValueAt } from "./dsp/timeline.js";
 import { NUM_BANDS } from "./dsp/bands.js";
 import { decodeStemFile, channelsFromBuffer } from "./audio/decode.js";
@@ -119,8 +121,14 @@ export default function App() {
   );
   const faderDb = useMemo(() => stems.map(stemFaderDb), [stems]);
   const modelKnobs = useMemo(() => ({ ...knobs, pair: pairArray(stems, pairById) }), [knobs, stems, pairById]);
-  const curves = useMemo(() => deriveCurves(analyses, faderDb, perTrack, modelKnobs), [analyses, faderDb, perTrack, modelKnobs]);
-  const timelines = useMemo(() => buildGainTimelines(curves, analyses, modelKnobs, perTrack), [curves, analyses, modelKnobs, perTrack]);
+  const roles = useMemo(() => stems.map((s) => s.role), [stems]);
+  const curves = useMemo(
+    () => (modelKnobs.flow === "lit" ? deriveLitCurves(analyses, faderDb, perTrack, modelKnobs, roles) : deriveCurves(analyses, faderDb, perTrack, modelKnobs)),
+    [analyses, faderDb, perTrack, modelKnobs, roles]
+  );
+  // The literature flow is the offline (static) system: no activity gating.
+  const timelineKnobs = useMemo(() => (modelKnobs.flow === "lit" ? { ...modelKnobs, gateEnabled: false } : modelKnobs), [modelKnobs]);
+  const timelines = useMemo(() => buildGainTimelines(curves, analyses, timelineKnobs, perTrack), [curves, analyses, timelineKnobs, perTrack]);
   const muted = useMemo(() => effectiveMuted(stems), [stems]);
   const readyStems = useMemo(() => stems.filter((s) => s.status === "ready"), [stems]);
   const specs = useMemo(
@@ -134,6 +142,8 @@ export default function App() {
           timeline: timelines[i],
           bypass: s.bypass || mixBypass,
           muted: muted[i],
+          q: curves.bandQ || 0,
+          hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0,
         }))
         .filter((_, i) => stems[i].status === "ready"),
     [stems, curves, timelines, mixBypass, muted]
@@ -180,7 +190,7 @@ export default function App() {
     try {
       const { files, evaluation } = await exportAll({
         stems,
-        specs: stems.map((s, i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i] })),
+        specs: stems.map((s, i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i], q: curves.bandQ || 0, hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0 })),
         timelines,
         curves,
         knobs: modelKnobs,
@@ -268,6 +278,13 @@ export default function App() {
               ))}
             </div>
           ) : null}
+          <div className="tabs flow" role="radiogroup" title="Which EQ model drives the mix: Magic (this tool's model) or Literature (the published cross-adaptive methods, parameter for parameter)">
+            {[["magic", "Magic"], ["lit", "Literature"]].map(([key, label]) => (
+              <button key={key} type="button" role="radio" aria-checked={knobs.flow === key} className={`tab${knobs.flow === key ? " on" : ""}`} onClick={() => dispatch({ type: "SET_KNOB", key: "flow", value: key })}>
+                {label}
+              </button>
+            ))}
+          </div>
           <span className="hint">
             {sessionRate ? `session ${sessionRate} Hz` : "no stems loaded"}
             {memoryMb > 0 ? ` · ${memoryMb >= 1024 ? `${(memoryMb / 1024).toFixed(1)} GB` : `${memoryMb.toFixed(0)} MB`} in memory` : ""}
@@ -283,7 +300,7 @@ export default function App() {
           </button>
         </nav>
         <Transport engine={engine} canPlay={readyStems.length > 0} mixBypass={mixBypass} onMixBypass={(v) => dispatch({ type: "SET_MIX_BYPASS", value: v })} masking={readyStems.length > 1 ? curves.masking : null} />
-        {workspace === "mix" && tab === "mix" ? <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} /> : null}
+        {workspace === "mix" && tab === "mix" ? knobs.flow === "lit" ? <LitPanel knobs={knobs} dispatch={dispatch} curves={curves} /> : <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} /> : null}
       </div>
 
       <main className={`view view-${workspace === "gain" ? "gain" : tab}`}>
@@ -297,7 +314,7 @@ export default function App() {
           <div className="columns">
             <div className="stems">{cards(true)}</div>
             <aside className="side">
-              <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} compact />
+              {knobs.flow === "lit" ? <LitPanel knobs={knobs} dispatch={dispatch} curves={curves} /> : <MacroKnobs knobs={knobs} dispatch={dispatch} onHighlight={setHighlightTerm} compact />}
               <AdvancedPanel knobs={knobs} dispatch={dispatch} />
             </aside>
           </div>

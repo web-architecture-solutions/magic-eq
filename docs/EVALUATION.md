@@ -97,6 +97,47 @@ Per stem at defaults (balanced):
 | Vox | 80.5% | 82.4% | -19.85 dB | -20.98 dB | 3.0 dB |
 | BGV 1 | 91.4% | 92.8% | -26.11 dB | -27.39 dB | 4.0 dB |
 
+### Literature flow (`--balance lufs`, the app's Balance)
+
+Same ten stems, faders from the Gain workspace's loudness balance with the
+default role offsets (kick 0.0, snare −5.6, OH −1.2, bass −7.4, guitars
+−9.9 / −11.2, organ −13.7, piano −1.7, vocal −8.5, BGV −10.4 dB). `lit` is
+the Literature flow at its defaults (Hafezi & Reiss 2015 masking stage,
+Amount 0.5, masker cut, high-pass by role, no spectral balance);
+`litBalance` adds the Perez-Gonzalez & Reiss 2009 spectral-balance stage.
+
+| preset | masked before | masked after | Δ masked | SMR before | SMR after | Δ SMR | overlap | effect | make-up |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bypass | 75.6% | 75.6% | 0.0 pt | -17.17 dB | -17.17 dB | +0.00 dB | +0.00 dB | 0.0 dB | 0.0 dB |
+| defaults (Magic) | 75.6% | 75.9% | 0.3 pt | -17.17 dB | -17.71 dB | -0.55 dB | -0.68 dB | 3.5 dB | 1.0 dB |
+| lit | 75.6% | 75.7% | 0.1 pt | -17.17 dB | -17.22 dB | -0.06 dB | -0.01 dB | 0.5 dB | 0.0 dB |
+| litMaskee | 75.6% | 75.5% | -0.0 pt | -17.17 dB | -17.16 dB | +0.01 dB | -0.01 dB | 0.3 dB | 0.0 dB |
+| litAmount1 | 75.6% | 75.7% | 0.1 pt | -17.17 dB | -17.28 dB | -0.12 dB | -0.02 dB | 1.1 dB | 0.0 dB |
+| litBalance | 75.6% | 77.9% | 2.4 pt | -17.17 dB | -17.46 dB | -0.29 dB | +1.66 dB | 7.0 dB | 3.8 dB |
+| litBalanceAmount1 | 75.6% | 78.9% | 3.3 pt | -17.17 dB | -17.67 dB | -0.50 dB | +2.31 dB | 10.6 dB | 6.0 dB |
+
+The paper's own kind of measure, the masking value summed over the
+occurrences its test finds (masker louder in a band essential for the
+maskee and nonessential for the masker):
+
+| preset | occurrences | before | after |
+| --- | --- | --- | --- |
+| lit | 8 | 11.4 dB·occ | 5.8 dB·occ |
+| litMaskee | 8 | 11.4 dB·occ | 21.2 dB·occ |
+| litAmount1 | 8 | 11.4 dB·occ | 0.2 dB·occ |
+| litBalance | 8 | 11.4 dB·occ | 28.6 dB·occ |
+| litBalanceAmount1 | 8 | 11.4 dB·occ | 30.0 dB·occ |
+
+Read: on balanced stems the 2015 test finds only eight occurrences across
+ten stems, and cutting the masker by the full masking value (Amount 1)
+removes them, as the method intends, with about 1 dB of mean effect. Cutting
+the maskee instead (Magic's direction) raises the paper's measure, by
+construction: the maskee is cut in a band essential to it. The 2009
+spectral-balance stage raises it more, because equal loudness per band
+across channels means cutting every stem's own loud bands, which are the
+bands the masking test calls essential. The ERB masked fraction barely
+moves under any of them (see below).
+
 ## Reading the numbers
 
 - **Level dominates.** With ten stems at equal loudness each one sits about
