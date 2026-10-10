@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { renderMix } from "../audio/render.js";
 import { decodeStemFile } from "../audio/decode.js";
 import { getLiveContext } from "../audio/context.js";

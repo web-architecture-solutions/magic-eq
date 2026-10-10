@@ -1,3 +1,4 @@
+import React from "react";
 import { bandCentres, NUM_BANDS } from "../dsp/bands.js";
 
 const W = 520;

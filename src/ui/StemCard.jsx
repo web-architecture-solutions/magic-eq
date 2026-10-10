@@ -1,3 +1,4 @@
+import React from "react";
 import { Slider } from "./Controls.jsx";
 import SpectrumPlot from "./SpectrumPlot.jsx";
 import ActivityStrip from "./ActivityStrip.jsx";

@@ -1,3 +1,4 @@
+import React from "react";
 import { ROLES, roleLabel } from "../dsp/roles.js";
 import { Slider } from "./Controls.jsx";
 import { titleOf } from "./params.js";

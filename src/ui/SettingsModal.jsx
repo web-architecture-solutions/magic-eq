@@ -1,3 +1,4 @@
+import React from "react";
 import { Slider } from "./Controls.jsx";
 import { PARAMS, titleOf } from "./params.js";
 import { ROLES, DEFAULT_ROLE_OFFSETS } from "../dsp/roles.js";

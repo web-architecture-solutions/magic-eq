@@ -1,3 +1,4 @@
+import React from "react";
 import { bandCentres } from "../dsp/bands.js";
 
 function short(n) {

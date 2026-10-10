@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { erbCentres, NUM_ERB } from "../dsp/metrics.js";
 import { stemColor } from "./palette.js";
 

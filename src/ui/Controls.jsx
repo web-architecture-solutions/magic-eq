@@ -1,3 +1,4 @@
+import React from "react";
 import { PARAMS, titleOf } from "./params.js";
 
 export function Label({ k, text, onHover }) {

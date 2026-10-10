@@ -1,3 +1,4 @@
+import React from "react";
 // Where a stem is active over the song, with the playhead. Only these
 // frames go into the stem's long-term spectrum.
 export default function ActivityStrip({ transitions, duration, position, activeFraction }) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { reducer, initState, newStem, effectiveMuted, stemFaderDb } from "./state/reducer.js";
 import { balanceLoudness, anchorFaders, predictMixPeak, masterTrimFor } from "./dsp/balance.js";
 import { DEFAULT_ROLE_OFFSETS } from "./dsp/roles.js";

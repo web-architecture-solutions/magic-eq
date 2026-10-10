@@ -1,3 +1,4 @@
+import React from "react";
 import { downloadBlob, downloadAll } from "../audio/exportAll.js";
 
 export default function ExportModal({ open, onClose, exportState, canExport, onExport, trimMix, onTrimMix, stemCount }) {
