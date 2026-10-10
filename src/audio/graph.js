@@ -1,5 +1,4 @@
 import { bandCentres, BAND_Q, NUM_BANDS } from "../dsp/bands.js";
-import { timelineValueAt } from "../dsp/timeline.js";
 import { dbToGain } from "./context.js";
 import { HPF_Q_WEBAUDIO_DB } from "../dsp/mixLoudness.js";
 
@@ -86,31 +85,10 @@ export function buildStemChain(ctx, buffer, spec) {
     setParam(dry.gain, bypass ? 1 : 0, immediate);
   }
 
-  // Static gains with no automation (stopped, or gating off).
+  // Static band gains (dB).
   function setGains(gains, immediate = false) {
     for (let b = 0; b < NUM_BANDS; b++) {
       setParam(biquads[b].gain, usable[b] ? gains[b] : 0, immediate);
-    }
-  }
-
-  // Schedule the sparse timeline. ctxTimeAtZero is the context time that
-  // corresponds to song position 0; fromOffset is the song position at
-  // which playback (re)starts.
-  function schedule(timeline, ctxTimeAtZero, fromOffset) {
-    const now = ctx.currentTime;
-    for (let b = 0; b < NUM_BANDS; b++) {
-      const p = biquads[b].gain;
-      const events = timeline.bands[b];
-      const initial = usable[b] ? timeline.initial[b] : 0;
-      p.cancelScheduledValues(now);
-      const v = usable[b] ? timelineValueAt(events, initial, fromOffset) : 0;
-      if (isOffline) p.setValueAtTime(v, now);
-      else p.setTargetAtTime(v, now, SMOOTH);
-      if (!usable[b]) continue;
-      for (const ev of events) {
-        if (ev.t < fromOffset) continue;
-        p.setTargetAtTime(ev.target, ctxTimeAtZero + ev.t, ev.tau);
-      }
     }
   }
 
@@ -159,7 +137,6 @@ export function buildStemChain(ctx, buffer, spec) {
     setStatic,
     setBypass,
     setGains,
-    schedule,
     start,
     stop,
     dispose,

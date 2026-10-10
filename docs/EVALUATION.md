@@ -20,15 +20,25 @@ where it is active, within 30 dB of its frame peak. Two numbers per stem:
   under its spread masker;
 - *mean SMR*: mean signal-to-masker ratio over own cells, in dB.
 
-The session total is the energy-weighted mean. Before vs after applies the
-derived 16-band gains (plus make-up) in the band-energy domain; the in-app
+The session total is the energy-weighted mean. Before vs after applies each
+stem's filter chain in the band-energy domain using the exact magnitude
+response of its peaking filters and high-pass at every ERB band centre
+(`erbChainGainsDb` in `src/dsp/mixLoudness.js`), plus make-up; the in-app
 report measures the rendered audio instead.
 
-**Subjective.** The *Listen* tab: a blind, loudness-matched comparison over a
-loop. Conditions are Bypass (hidden reference), the current settings, and any
-external renders of the same stems (TheMasker, Soothe, anything), shuffled
-and lettered. Two ratings per condition, *separation* and *naturalness*;
-identities revealed on request; ratings downloadable as JSON.
+**Subjective.** The *Listen* workspace: a blind comparison over a loop of
+the raw stems, the balanced faders and the EQ at its current settings, plus
+any external renders of the same stems, each matched to the same BS.1770
+integrated loudness, shuffled and lettered. Two ratings per condition,
+*separation* and *naturalness*; identities revealed on request; ratings
+downloadable as JSON. The design follows the multi-stimulus, no-mandatory-
+reference tests used for mixes (`deman2015perceptual`; see the reading
+priorities in `docs/references/README.md` for a full test design).
+
+**The paper's own measure.** The Masking workspace and the CLI also report
+Hafezi & Reiss's kind of objective: the masking value (dB by which a masker
+is louder in a band essential for the maskee and nonessential for itself)
+summed over all occurrences, before and after the EQ.
 
 **CLI.**
 
@@ -45,122 +55,77 @@ stems gets a number.
 ## Results: ten stems from the Human Radio session
 
 Kick, snare top, overhead L, bass, two guitars, organ L, piano L, lead vocal,
-one backing vocal. 44.1 kHz, 24-bit, 302 s each.
+one backing vocal. 44.1 kHz, 24-bit, 302 s each. Faders from the app's
+Balance (BS.1770 loudness plus default role offsets): kick 0.0, snare −5.6,
+OH −1.2, bass −7.4, guitars −9.9 / −11.2, organ −13.7, piano −1.7, vocal
+−8.5, BGV −10.4 dB.
 
-### Raw tracking levels (`--balance none`)
+`lit` is the EQ at its defaults (masking reduction at Amount 0.5, cut on
+the masker, high-pass by role at 80 Hz, no spectral balance). The other
+rows change one thing each.
 
-| preset | masked before | masked after | Δ masked | SMR before | SMR after | Δ SMR | overlap | effect | make-up |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bypass | 69.5% | 69.5% | 0.0 pt | -13.62 dB | -13.62 dB | +0.00 dB | +0.00 dB | 0.0 dB | 0.0 dB |
-| defaults | 69.5% | 69.4% | -0.1 pt | -13.62 dB | -13.65 dB | -0.03 dB | -0.65 dB | 3.5 dB | 1.1 dB |
-| carve3 | 69.5% | 69.1% | -0.4 pt | -13.62 dB | -13.55 dB | +0.07 dB | -0.48 dB | 1.9 dB | 0.9 dB |
-| carve6 | 69.5% | 68.6% | -0.9 pt | -13.62 dB | -13.52 dB | +0.10 dB | -1.02 dB | 3.8 dB | 1.7 dB |
-| scoop3 | 69.5% | 70.0% | 0.5 pt | -13.62 dB | -13.75 dB | -0.13 dB | -0.24 dB | 3.0 dB | 0.3 dB |
-| flatten3 | 69.5% | 69.8% | 0.3 pt | -13.62 dB | -13.70 dB | -0.08 dB | +0.43 dB | 3.0 dB | 2.3 dB |
-| shape | 69.5% | 69.6% | 0.1 pt | -13.62 dB | -13.65 dB | -0.03 dB | -0.25 dB | 2.5 dB | 3.6 dB |
-| psycho3 | 69.5% | 69.2% | -0.3 pt | -13.62 dB | -13.56 dB | +0.06 dB | -0.47 dB | 1.7 dB | 0.7 dB |
-| psycho6 | 69.5% | 68.8% | -0.7 pt | -13.62 dB | -13.54 dB | +0.08 dB | -0.99 dB | 3.2 dB | 1.3 dB |
-| sum3 | 69.5% | 69.3% | -0.3 pt | -13.62 dB | -13.55 dB | +0.07 dB | -0.29 dB | 1.3 dB | 0.8 dB |
-| mean3 | 69.5% | 69.0% | -0.5 pt | -13.62 dB | -13.47 dB | +0.15 dB | -0.25 dB | 1.8 dB | 0.4 dB |
+| preset | masked before | masked after | Δ masked | SMR before | SMR after | Δ SMR | effect | make-up |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bypass | 75.6% | 75.6% | 0.0 pt | -17.17 dB | -17.17 dB | +0.00 dB | 0.0 dB | 0.0 dB |
+| lit | 75.6% | 74.9% | -0.7 pt | -17.17 dB | -17.05 dB | +0.12 dB | 0.5 dB | 0.0 dB |
+| litNoHpf | 75.6% | 75.7% | 0.2 pt | -17.17 dB | -17.25 dB | -0.09 dB | 0.5 dB | 0.0 dB |
+| litMaskee | 75.6% | 74.7% | -0.9 pt | -17.17 dB | -16.94 dB | +0.23 dB | 0.3 dB | 0.0 dB |
+| litAmount1 | 75.6% | 75.0% | -0.5 pt | -17.17 dB | -17.14 dB | +0.03 dB | 1.1 dB | 0.0 dB |
+| litBalance | 75.6% | 80.9% | 5.3 pt | -17.17 dB | -18.25 dB | -1.08 dB | 6.7 dB | 3.7 dB |
+| litBalanceAmount1 | 75.6% | 82.7% | 7.1 pt | -17.17 dB | -18.66 dB | -1.49 dB | 10.2 dB | 5.9 dB |
 
-### Equal-RMS balance (`--balance rms`)
-
-Faders: kick +10.8, snare +9.4, OH +16.1, bass +2.5, guitars +5.3 / +4.6,
-organ +1.9, piano +13.5, vocal +2.3, BGV +4.3 dB.
-
-| preset | masked before | masked after | Δ masked | SMR before | SMR after | Δ SMR | overlap | effect | make-up |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bypass | 81.3% | 81.3% | 0.0 pt | -18.44 dB | -18.44 dB | +0.00 dB | +0.00 dB | 0.0 dB | 0.0 dB |
-| defaults | 81.3% | 80.7% | -0.6 pt | -18.44 dB | -18.88 dB | -0.43 dB | -0.93 dB | 4.1 dB | 1.1 dB |
-| carve3 | 81.3% | 80.8% | -0.5 pt | -18.44 dB | -18.78 dB | -0.33 dB | -0.73 dB | 2.2 dB | 0.9 dB |
-| carve6 | 81.3% | 80.3% | -0.9 pt | -18.44 dB | -19.16 dB | -0.72 dB | -1.51 dB | 4.3 dB | 1.6 dB |
-| scoop3 | 81.3% | 81.2% | -0.1 pt | -18.44 dB | -18.57 dB | -0.12 dB | -0.30 dB | 3.0 dB | 0.3 dB |
-| flatten3 | 81.3% | 81.7% | 0.4 pt | -18.44 dB | -18.30 dB | +0.15 dB | +0.63 dB | 3.0 dB | 2.3 dB |
-| shape | 81.3% | 81.0% | -0.3 pt | -18.44 dB | -18.63 dB | -0.18 dB | -0.42 dB | 2.5 dB | 3.6 dB |
-| psycho3 | 81.3% | 80.8% | -0.5 pt | -18.44 dB | -18.76 dB | -0.32 dB | -0.71 dB | 2.1 dB | 0.9 dB |
-| psycho6 | 81.3% | 80.4% | -0.9 pt | -18.44 dB | -19.13 dB | -0.68 dB | -1.46 dB | 4.1 dB | 1.6 dB |
-| sum3 | 81.3% | 81.1% | -0.2 pt | -18.44 dB | -18.67 dB | -0.23 dB | -0.33 dB | 1.1 dB | 0.6 dB |
-| mean3 | 81.3% | 80.7% | -0.5 pt | -18.44 dB | -18.53 dB | -0.08 dB | -0.47 dB | 2.1 dB | 0.4 dB |
-
-Per stem at defaults (balanced):
-
-| stem | masked before | masked after | SMR before | SMR after | effect |
-| --- | --- | --- | --- | --- | --- |
-| Kick | 92.6% | 93.7% | -30.29 dB | -32.18 dB | 4.6 dB |
-| Snare top | 97.4% | 98.2% | -29.57 dB | -32.27 dB | 4.8 dB |
-| OH L | 69.2% | 64.6% | -13.89 dB | -12.34 dB | 5.0 dB |
-| Bass | 68.8% | 68.0% | -13.95 dB | -13.82 dB | 4.6 dB |
-| Guitar | 86.0% | 85.2% | -15.03 dB | -14.96 dB | 3.0 dB |
-| Guitar 2 | 79.8% | 79.2% | -12.95 dB | -13.05 dB | 3.6 dB |
-| Organ L | 73.0% | 72.8% | -13.92 dB | -14.08 dB | 4.2 dB |
-| Piano L | 91.0% | 90.7% | -21.62 dB | -22.10 dB | 4.2 dB |
-| Vox | 80.5% | 82.4% | -19.85 dB | -20.98 dB | 3.0 dB |
-| BGV 1 | 91.4% | 92.8% | -26.11 dB | -27.39 dB | 4.0 dB |
-
-### Literature flow (`--balance lufs`, the app's Balance)
-
-Same ten stems, faders from the Gain workspace's loudness balance with the
-default role offsets (kick 0.0, snare −5.6, OH −1.2, bass −7.4, guitars
-−9.9 / −11.2, organ −13.7, piano −1.7, vocal −8.5, BGV −10.4 dB). `lit` is
-the Literature flow at its defaults (Hafezi & Reiss 2015 masking stage,
-Amount 0.5, masker cut, high-pass by role, no spectral balance);
-`litBalance` adds the Perez-Gonzalez & Reiss 2009 spectral-balance stage.
-
-| preset | masked before | masked after | Δ masked | SMR before | SMR after | Δ SMR | overlap | effect | make-up |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bypass | 75.6% | 75.6% | 0.0 pt | -17.17 dB | -17.17 dB | +0.00 dB | +0.00 dB | 0.0 dB | 0.0 dB |
-| defaults (Magic) | 75.6% | 75.9% | 0.3 pt | -17.17 dB | -17.71 dB | -0.55 dB | -0.68 dB | 3.5 dB | 1.0 dB |
-| lit | 75.6% | 75.7% | 0.1 pt | -17.17 dB | -17.22 dB | -0.06 dB | -0.01 dB | 0.5 dB | 0.0 dB |
-| litMaskee | 75.6% | 75.5% | -0.0 pt | -17.17 dB | -17.16 dB | +0.01 dB | -0.01 dB | 0.3 dB | 0.0 dB |
-| litAmount1 | 75.6% | 75.7% | 0.1 pt | -17.17 dB | -17.28 dB | -0.12 dB | -0.02 dB | 1.1 dB | 0.0 dB |
-| litBalance | 75.6% | 77.9% | 2.4 pt | -17.17 dB | -17.46 dB | -0.29 dB | +1.66 dB | 7.0 dB | 3.8 dB |
-| litBalanceAmount1 | 75.6% | 78.9% | 3.3 pt | -17.17 dB | -17.67 dB | -0.50 dB | +2.31 dB | 10.6 dB | 6.0 dB |
-
-The paper's own kind of measure, the masking value summed over the
-occurrences its test finds (masker louder in a band essential for the
-maskee and nonessential for the masker):
+The paper's own measure:
 
 | preset | occurrences | before | after |
 | --- | --- | --- | --- |
 | lit | 8 | 11.4 dB·occ | 5.8 dB·occ |
 | litMaskee | 8 | 11.4 dB·occ | 21.2 dB·occ |
 | litAmount1 | 8 | 11.4 dB·occ | 0.2 dB·occ |
-| litBalance | 8 | 11.4 dB·occ | 28.6 dB·occ |
-| litBalanceAmount1 | 8 | 11.4 dB·occ | 30.0 dB·occ |
+| litBalance | 8 | 11.4 dB·occ | 27.6 dB·occ |
+| litBalanceAmount1 | 8 | 11.4 dB·occ | 29.4 dB·occ |
 
-Read: on balanced stems the 2015 test finds only eight occurrences across
-ten stems, and cutting the masker by the full masking value (Amount 1)
-removes them, as the method intends, with about 1 dB of mean effect. Cutting
-the maskee instead (Magic's direction) raises the paper's measure, by
-construction: the maskee is cut in a band essential to it. The 2009
-spectral-balance stage raises it more, because equal loudness per band
-across channels means cutting every stem's own loud bands, which are the
-bands the masking test calls essential. The ERB masked fraction barely
-moves under any of them (see below).
+Per stem at the defaults:
+
+| stem | masked before | masked after | SMR before | SMR after | effect |
+| --- | --- | --- | --- | --- | --- |
+| Kick | 89.7% | 89.9% | -26.36 dB | -26.57 dB | 2.3 dB |
+| Snare top | 96.8% | 96.8% | -29.69 dB | -29.45 dB | 0.3 dB |
+| OH L | 75.5% | 75.2% | -17.13 dB | -17.06 dB | 0.0 dB |
+| Bass | 53.9% | 51.7% | -8.93 dB | -8.28 dB | 0.5 dB |
+| Guitar | 87.8% | 87.7% | -16.05 dB | -16.14 dB | 0.0 dB |
+| Guitar 2 | 83.4% | 83.2% | -14.44 dB | -14.33 dB | 0.0 dB |
+| Organ L | 74.6% | 74.4% | -14.97 dB | -14.82 dB | 0.0 dB |
+| Piano L | 91.4% | 91.1% | -22.46 dB | -22.25 dB | 0.0 dB |
+| Vox | 70.7% | 71.5% | -15.41 dB | -15.94 dB | 1.6 dB |
+| BGV 1 | 90.3% | 90.3% | -25.66 dB | -25.81 dB | 0.7 dB |
 
 ## Reading the numbers
 
-- **Level dominates.** With ten stems at equal loudness each one sits about
-  10 dB under the sum of the others, so the metric calls the mix 81% masked
-  before any EQ. Static cuts of 3 to 6 dB move that by under a point. This is
-  the finding in the literature too: balance sets masking; EQ is second
-  order.
-- **The direction is right, the size is small.** Every Unmask preset lowers
-  the masked fraction; the self terms (Flatten, Scoop) do not, which is
-  expected, because they are about a stem's own shape, not about who
-  dominates whom. Mean SMR can go *down* while the masked fraction goes
-  down: a stem that yields in a band it was losing anyway loses that band
-  further (kick, snare, vocal), while the stems it yields to gain (overhead,
-  bass, guitars). Whether that trade sounds like separation is exactly what
-  the metric cannot say.
-- **Combine modes.** Max (default) and psycho give the largest effect per dB;
-  the power-sum of all others (the literature's framing) gives the smallest,
-  because with many stems it flattens toward "everyone dominates everyone".
-- **Psychoacoustic weighting** makes almost no difference to the metric at
-  this band resolution, so it stays off by default.
-- **What is left to measure** is the listening test. The size of the
-  objective change here is in the range where Ronan et al. found listeners
-  did not prefer the "less masked" mixes, and where Hafezi & Reiss found a
-  single-parameter offline system approached a professional mix. Only ears
-  decide between those two outcomes, and the Listen tab is built to make
-  that comparison fair and blind, including against other tools' renders.
+- **Level dominates.** With ten stems at balanced loudness each sits about
+  10 dB under the sum of the others, so the metric calls the mix three
+  quarters masked before any EQ. Balance sets masking; EQ is second order.
+  That is also what listening says: the large audible change comes from
+  gain staging, and the EQ is a clean finish on top.
+- **The masking stage does what the paper says, gently.** On balanced stems
+  the 2015 test finds only eight occurrences; cutting the masker removes
+  them (Amount 1) with about 1 dB of mean change, and the ERB masked
+  fraction drops by under a point. The test is written for unbalanced
+  material; most of its work was already done by the faders.
+- **The high-pass helps.** Without it the defaults score slightly worse
+  than bypass on this metric; with it, slightly better. The likely reason is
+  that the high-pass removes low-frequency energy from non-bass stems that
+  sits in the bass's and kick's range.
+- **Cutting the maskee** (not the paper) scores well on the ERB metric but
+  more than doubles the paper's own measure: it cuts a stem in bands that
+  are essential to it.
+- **Spectral balance** (2009) moves 7 to 10 dB and makes both measures
+  worse on balanced stems: equal loudness per band across channels means
+  cutting every stem's loudest bands. It stays off by default.
+- **What is left is listening.** The objective changes are small and in the
+  range where listeners have disagreed with masking metrics before
+  (`ronan2018automatic`; `wakefield2015investigation`). The Listen workspace
+  is built for that comparison, and the reading list has the design for a
+  proper test with other listeners.
+
+Results for the archived Magic model are on the branch
+`archive/magic-eq-original`.

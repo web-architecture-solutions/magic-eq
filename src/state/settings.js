@@ -1,29 +1,19 @@
-// Configuration that persists across sessions: how the model is configured,
+// Configuration that persists across sessions: gain staging and analysis,
 // never mix state. Stored sparsely (only values that differ from defaults)
 // under a versioned key, validated on load, with storage access at the edge.
-import { DEFAULT_KNOBS } from "../dsp/model.js";
+// Keys that are no longer settings (from older versions) are ignored.
+import { DEFAULT_KNOBS } from "../dsp/common.js";
 import { DEFAULT_ROLE_OFFSETS } from "../dsp/roles.js";
 
 export const SETTINGS_VERSION = 1;
 export const STORAGE_KEY = "magic-eq.settings";
-export const SETTINGS_KEYS = ["driveMode", "coupled", "crossNorm", "psycho", "D", "floorDb", "T", "scoopRange", "targetLufs", "balanceMethod", "roleOffsets", "flow", "peakTargetDb"];
+export const SETTINGS_KEYS = ["floorDb", "targetLufs", "roleOffsets", "peakTargetDb"];
 
 const num = (lo, hi) => (v) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
-const oneOf = (list) => (v) => list.includes(v);
-const bool = (v) => typeof v === "boolean";
 
 export const VALIDATORS = {
-  driveMode: oneOf(["presence", "multiplier"]),
-  coupled: bool,
-  crossNorm: oneOf(["max", "sum", "mean"]),
-  psycho: bool,
-  D: num(3, 24),
   floorDb: num(-60, -6),
-  T: num(-30, -1),
-  scoopRange: num(3, 30),
   targetLufs: num(-40, -6),
-  balanceMethod: oneOf(["loudness", "peakBand", "pink"]),
-  flow: oneOf(["magic", "lit"]),
   peakTargetDb: num(-24, 0),
   roleOffsets: (v) => v === null || (v && typeof v === "object" && Object.keys(DEFAULT_ROLE_OFFSETS).every((k) => v[k] === undefined || num(-24, 24)(v[k]))),
 };

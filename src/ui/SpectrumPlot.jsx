@@ -12,11 +12,11 @@ function fmt(f) {
   return f >= 1000 ? `${(f / 1000).toFixed(f >= 10000 ? 0 : 1)}k` : `${Math.round(f)}`;
 }
 
-// Two stacked panels on one SVG: the stem's spectrum (bars, dB relative to
-// its own peak) with its mode envelope, and the derived cut per band. `live`
-// (optional) is the instantaneous gated cut during playback, drawn lighter.
-export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, knee = 0.25, audible, termLabels }) {
-  const tl = termLabels || { cross: "depth", level: "peak taming", scoop: "valley cut" };
+// Two stacked panels on one SVG: the stem's long-term spectrum (bars, dB
+// relative to its own peak) and its EQ per band, stacked by stage: the
+// masking cut (Hafezi & Reiss) and the spectral-balance term (Perez-Gonzalez
+// & Reiss), when that stage is on.
+export default function SpectrumPlot({ S, G, unclamped, terms, maxCut, audible }) {
   const centres = bandCentres();
   const plotW = W - PAD_L - PAD_R;
   const bw = plotW / NUM_BANDS;
@@ -25,12 +25,9 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
   const yG = (db) => (Math.min(0, Math.max(-cutScale, db)) / -cutScale) * H2;
   const top2 = H1 + GAP;
   const total = H1 + GAP + H2 + 18;
-  const kneeDb = knee > 0 ? (1 - knee) * cutScale : cutScale;
-
-  const envPath = E ? Array.from(E, (v, b) => `${b === 0 ? "M" : "L"}${(PAD_L + (b + 0.5) * bw).toFixed(1)},${yS(v).toFixed(1)}`).join(" ") : "";
 
   return (
-    <svg className="plot" viewBox={`0 0 ${W} ${total}`} role="img" aria-label="Spectrum and derived cut per band">
+    <svg className="plot" viewBox={`0 0 ${W} ${total}`} role="img" aria-label="Spectrum and EQ per band">
       {[0, -20, -40, -60].map((db) => (
         <g key={db}>
           <line x1={PAD_L} x2={W - PAD_R} y1={yS(db)} y2={yS(db)} className="grid" />
@@ -48,7 +45,6 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
             </rect>
           );
         })}
-      {envPath ? <path d={envPath} className="line-env" /> : null}
 
       {[0, -cutScale / 2, -cutScale].map((db) => (
         <g key={db}>
@@ -58,37 +54,35 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
           </text>
         </g>
       ))}
-      {knee > 0 ? <line x1={PAD_L} x2={W - PAD_R} y1={top2 + yG(-kneeDb)} y2={top2 + yG(-kneeDb)} className="grid knee" /> : null}
       {G &&
         Array.from(G, (v, b) => {
           const y = yG(v);
           const u = unclamped ? unclamped[b] : v;
-          const held = u < -kneeDb - 0.01;
-          const lv = live ? live[b] : null;
-          const scale = u < 0 ? v / u : 0;
-          const parts = terms
-            ? [
-                ["cross", terms.cross?.[b] ?? 0],
-                ["level", terms.level?.[b] ?? 0],
-                ["scoop", terms.scoop?.[b] ?? 0],
-              ]
-            : [["cross", v]];
+          const held = u < -cutScale - 0.01;
+          const cross = terms?.cross?.[b] ?? v;
+          const level = terms?.level?.[b] ?? 0;
+          // Stack the negative parts, scaled so they sum to the clamped cut.
+          const neg = Math.min(0, cross) + Math.min(0, level);
+          const scale = neg < 0 && v < 0 ? v / neg : 0;
+          const segs = [];
           let acc = 0;
-          const segs = parts.map(([name, t]) => {
+          for (const [name, t] of [
+            ["cross", Math.min(0, cross)],
+            ["level", Math.min(0, level)],
+          ]) {
             const from = acc;
             acc += t * scale;
-            return [name, from, acc];
-          });
-          const detail = terms ? ` (${tl.cross} ${(terms.cross?.[b] ?? 0).toFixed(2)}, ${tl.level} ${(terms.level?.[b] ?? 0).toFixed(2)}, ${tl.scoop} ${(terms.scoop?.[b] ?? 0).toFixed(2)})` : "";
+            segs.push([name, from, acc]);
+          }
+          const detail = terms ? ` (masking cut ${cross.toFixed(2)}, spectral balance ${level.toFixed(2)})` : "";
           return (
             <g key={b}>
               <rect x={PAD_L + b * bw + 1} y={top2} width={bw - 2} height={Math.max(0, y)} className="bar-cut-hit" rx={2}>
-                <title>{`${fmt(centres[b])} Hz: cut ${v.toFixed(2)} dB${detail}${held ? ` (held by the ceiling; would be ${u.toFixed(2)})` : ""}${lv != null ? `; right now ${lv.toFixed(2)} dB` : ""}`}</title>
+                <title>{`${fmt(centres[b])} Hz: ${v >= 0 ? "+" : ""}${v.toFixed(2)} dB${detail}${held ? ` (held by the max cut; would be ${u.toFixed(2)})` : ""}`}</title>
               </rect>
               {segs.map(([name, from, to]) =>
                 to < from - 1e-6 ? <rect key={name} x={PAD_L + b * bw + 1} y={top2 + yG(from)} width={bw - 2} height={Math.max(0, yG(to) - yG(from))} className={`seg seg-${name}`} rx={1} /> : null
               )}
-              {lv != null && Math.abs(lv - v) > 0.05 ? <rect x={PAD_L + b * bw + 1} y={top2} width={bw - 2} height={Math.max(0, yG(lv))} className="bar-live" rx={2} /> : null}
               {held ? <line x1={PAD_L + b * bw + 2} x2={PAD_L + (b + 1) * bw - 2} y1={top2 + H2 - 1.5} y2={top2 + H2 - 1.5} className="cap" /> : null}
             </g>
           );
@@ -101,15 +95,10 @@ export default function SpectrumPlot({ S, E, G, unclamped, terms, live, maxCut, 
         ) : null
       )}
       <text x={PAD_L} y={H1 + 12} className="legend" textAnchor="start">
-        <tspan className="sw-spec">■</tspan> spectrum (dB rel. peak) <tspan className="sw-env">—</tspan> modes
+        <tspan className="sw-spec">■</tspan> spectrum (dB rel. peak)
       </text>
       <text x={W - PAD_R} y={H1 + 12} className="legend" textAnchor="end">
-        <tspan className="sw-cross">■</tspan> {tl.cross} <tspan className="sw-level">■</tspan> {tl.level}
-        {tl.scoop ? <tspan className="sw-scoop"> ■</tspan> : null}
-        {tl.scoop ? ` ${tl.scoop}` : ""}
-        {live ? " " : ""}
-        {live ? <tspan className="sw-live">■</tspan> : null}
-        {live ? " now" : ""}
+        <tspan className="sw-cross">■</tspan> masking cut <tspan className="sw-level">■</tspan> spectral balance
       </text>
     </svg>
   );

@@ -1,7 +1,6 @@
 import { NUM_BANDS, binRanges } from "./bands.js";
 import { makeSpectrumAnalyser } from "./fft.js";
 import { frameRmsDb, detectGate, numFramesFor } from "./gate.js";
-import { modeEnvelope } from "./envelope.js";
 import { erbBinRanges, accumulateErb, NUM_ERB } from "./metrics.js";
 import { integratedLoudness, samplePeakDb, framePeaksDb } from "./loudness.js";
 import { mixToMono } from "./mono.js";
@@ -9,7 +8,7 @@ import { mixToMono } from "./mono.js";
 export const DB_FLOOR = -120;
 
 // Long-term band spectrum of a mono stem, averaged over active frames only,
-// plus the activity gate and the mode envelope.
+// plus the activity gate.
 //
 // Calibration: a full-scale sine reads 0 dB in its band (bandMode 'sum').
 export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
@@ -73,7 +72,6 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
 
   const S = new Float64Array(NUM_BANDS);
   for (let b = 0; b < NUM_BANDS; b++) S[b] = bandDb[b] - peakDb;
-  const E = modeEnvelope(S);
 
   // Long-term ERB spectrum over active frames (power mean), for the overlay.
   const erbMeanDb = new Float64Array(NUM_ERB).fill(DB_FLOOR);
@@ -98,7 +96,6 @@ export function analyzeStem(mono, sampleRate, opts = {}, onProgress) {
     bandDb,
     peakDb,
     S,
-    E,
     frameRmsDb: rms,
     active: gate.active,
     erb: { numBands: NUM_ERB, energies: erbEnergies, meanDb: erbMeanDb },

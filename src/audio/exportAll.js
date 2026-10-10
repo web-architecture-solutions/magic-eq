@@ -23,8 +23,8 @@ function baseName(name) {
 }
 
 // Renders every stem and the mix, encodes 24-bit WAVs, and builds the recipe.
-// specs[i] = { faderDb, makeupDb, gains }, timelines[i] from buildGainTimelines.
-export async function exportAll({ stems, specs, timelines, curves, knobs, sampleRate, trimMix = true, evaluate = true, masterTrimDb = 0, onProgress }) {
+// specs[i] = { faderDb, makeupDb, gains, q, hpfHz }.
+export async function exportAll({ stems, specs, curves, knobs, sampleRate, trimMix = true, evaluate = true, masterTrimDb = 0, onProgress }) {
   const files = [];
   const measuredMakeupDb = [];
   const processed = [];
@@ -39,10 +39,10 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
     // Render without the fader so the stem comes back at its source level;
     // the mix below applies faders.
     const spec = { ...specs[i], faderDb: 0 };
-    const rendered = await renderStem(s.buffer, spec, timelines?.[i]);
+    const rendered = await renderStem(s.buffer, spec);
     const before = rmsDbOfBuffer(s.buffer);
     const after = rmsDbOfBuffer(rendered);
-    const residual = knobs.loudnessMatch && Number.isFinite(before) && Number.isFinite(after) ? before - after : 0;
+    const residual = knobs.litMakeup && Number.isFinite(before) && Number.isFinite(after) ? before - after : 0;
     measuredMakeupDb.push((specs[i].makeupDb || 0) + residual);
     const chans = channelsOf(rendered, dbToGain(residual));
     if (evaluate) {
@@ -66,7 +66,7 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
 
   report("Rendering mix");
   const mixSpecs = specs.map((sp, i) => ({ ...sp, makeupDb: (sp.makeupDb || 0) + processed[i].residual }));
-  const mix = await renderMix(stems, mixSpecs, timelines, sampleRate);
+  const mix = await renderMix(stems, mixSpecs, sampleRate);
   const mixChans = channelsOf(mix, dbToGain(masterTrimDb || 0));
   let mixPeak = 0;
   for (const ch of mixChans) for (let i = 0; i < ch.length; i++) mixPeak = Math.max(mixPeak, Math.abs(ch[i]));
@@ -102,7 +102,7 @@ export async function exportAll({ stems, specs, timelines, curves, knobs, sample
     report();
   }
 
-  const recipe = buildRecipe({ stems, curves, timelines, knobs, sampleRate, measuredMakeupDb });
+  const recipe = buildRecipe({ stems, curves, knobs, sampleRate, measuredMakeupDb, masterTrimDb });
   if (evaluation) recipe.evaluation = evaluation;
   files.push({
     name: "recipe.json",

@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { balanceLoudness, balancePeakBand, balancePinkReference, anchorFaders, predictMixPeak, masterTrimFor, pinkErbDb } from "../src/dsp/balance.js";
+import { balanceLoudness, anchorFaders, predictMixPeak, masterTrimFor } from "../src/dsp/balance.js";
 import { guessRole, DEFAULT_ROLE_OFFSETS } from "../src/dsp/roles.js";
 import { analyzeChannels } from "../src/dsp/analyze.js";
-import { deriveCurves, knobDefaults, perTrackDefaults } from "../src/dsp/model.js";
 import { NUM_BANDS } from "../src/dsp/bands.js";
 import { sine, threeStems } from "./helpers/synth.js";
 
@@ -51,22 +50,6 @@ describe("balance", () => {
     expect(faders[0]).toBeCloseTo(-2, 9);
   });
 
-  it("peak-band method is target minus the loudest band", () => {
-    expect(balancePeakBand([{ peakDb: -12, role: "other" }], { targetDb: -18 })[0]).toBeCloseTo(-6, 9);
-  });
-
-  it("pink reference slopes 3 dB per octave on ERB bands and reproduces the treble bias", () => {
-    const pink = pinkErbDb();
-    expect(pink.length).toBeGreaterThan(38);
-    expect(pink[0]).toBeGreaterThan(pink[pink.length - 1] + 5); // low bands are wide in octaves, so pink has more power there
-    const lo = analyzeChannels([sine(sr, 3, 100, 0.3)], sr);
-    const hi = analyzeChannels([sine(sr, 3, 8000, 0.3)], sr);
-    const mk = (a) => ({ erb: { energies: a.erb.energies, numFrames: a.numFrames, active: a.active }, role: "other" });
-    const auto = balancePinkReference([mk(lo), mk(hi)], { targetDb: -18 });
-    // Equal-level sines: the high one sits above the pink slope more, so it gets turned down more.
-    expect(auto[1]).toBeLessThan(auto[0]);
-  });
-
   it("predicts a mix peak that bounds the true peak of the sum", () => {
     const l = sine(sr, 1, 100, 0.4);
     const r = sine(sr, 1, 100, 0.4, Math.PI / 3);
@@ -81,16 +64,6 @@ describe("balance", () => {
     expect(upperDb).toBeGreaterThanOrEqual(trueDb - 0.01);
     expect(rssDb).toBeLessThanOrEqual(upperDb);
     expect(masterTrimFor(upperDb, -6)).toBeCloseTo(Math.min(0, -6 - upperDb), 9);
-  });
-
-  it("the model is invariant to a global fader offset", () => {
-    const { bass, guitar, pad } = threeStems(sr, 2);
-    const analyses = [bass, guitar, pad].map((x) => analyzeChannels([x], sr));
-    const pt = [perTrackDefaults(), perTrackDefaults(), perTrackDefaults()];
-    const knobs = knobDefaults({ carveDb: 3 });
-    const a = deriveCurves(analyses, [0, 0, -20], pt, knobs);
-    const b = deriveCurves(analyses, [-9, -9, -29], pt, knobs);
-    for (let i = 0; i < 3; i++) for (let k = 0; k < NUM_BANDS; k++) expect(b.G[i][k]).toBeCloseTo(a.G[i][k], 9);
   });
 
   it("analysis carries loudness, peak, frame peaks and the ERB mean", () => {

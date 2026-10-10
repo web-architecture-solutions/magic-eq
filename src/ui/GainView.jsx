@@ -1,6 +1,6 @@
 import { ROLES, roleLabel } from "../dsp/roles.js";
 import { Slider } from "./Controls.jsx";
-import { titleOf, PARAMS } from "./params.js";
+import { titleOf } from "./params.js";
 import { stemColor } from "./palette.js";
 
 const fmtDb = (v, d = 1) => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(d)}` : "–");
@@ -58,21 +58,11 @@ function FaderStrip({ stem, index, meter, knobs, dispatch, muted }) {
 }
 
 export default function GainView({ stems, knobs, dispatch, meters, muted, onBalance, headroom, masterTrimDb, lastBalance, allReady, compare }) {
-  const method = knobs.balanceMethod || "loudness";
   const suggestion = headroom?.suggestedTrimDb ?? 0;
   const target = knobs.peakTargetDb ?? -6;
   return (
     <div className="gain">
       <div className="gain-toolbar">
-        <label className="slider" title={titleOf("balanceMethod")}>
-          <span className="slider-label">{PARAMS.balanceMethod.name}</span>
-          <select value={method} onChange={(e) => dispatch({ type: "SET_KNOB", key: "balanceMethod", value: e.target.value })}>
-            <option value="loudness">Loudness + role offsets</option>
-            <option value="peakBand">Peak band</option>
-            <option value="pink">Pink reference</option>
-          </select>
-          <span />
-        </label>
         <Slider k="targetLufs" value={knobs.targetLufs} min={-40} max={-6} step={1} onChange={(v) => dispatch({ type: "SET_KNOB", key: "targetLufs", value: v })} />
         <button type="button" className="primary" disabled={!allReady} onClick={onBalance} title="Set every stem's automatic fader from the analysis; trims are kept; the loudest resulting fader lands at 0 dB">
           Balance
@@ -84,7 +74,7 @@ export default function GainView({ stems, knobs, dispatch, meters, muted, onBala
           Clear
         </button>
         {knobs.postFader ? <span className="warn">Stems are post-fader is on: faders are ignored. Balance turns it off.</span> : null}
-        {lastBalance ? <span className="hint">balanced by {lastBalance.method}; anchored by {fmtDb(lastBalance.shiftDb)} dB</span> : null}
+        {lastBalance ? <span className="hint">balanced by loudness; anchored by {fmtDb(lastBalance.shiftDb)} dB</span> : null}
       </div>
       <div className="gain-master">
         <div className="headroom" title="Predicted mix peak from the stems' per-frame peaks at the current faders: coherent sum (upper bound) and root-sum-square (uncorrelated estimate). The live meter during playback is the truth.">
@@ -125,7 +115,7 @@ export default function GainView({ stems, knobs, dispatch, meters, muted, onBala
         ))}
       </div>
       <p className="hint">
-        Loudness is ITU BS.1770 integrated (K-weighted, gated) per stem; Balance equalises it to the target plus the role offset, then shifts everything so nothing is boosted above 0 dB. Trims are yours and survive a re-balance. Roles were guessed from file names; the offsets live in Settings. ({roleLabel("leadVocal")} on top, cymbals and room mics lowest.)
+        Loudness is ITU-R BS.1770 integrated (K-weighted, gated) per stem; Balance equalises it to the target plus the role offset (after Mansbridge, Finn &amp; Reiss 2012), then shifts everything so nothing is boosted above 0 dB. Trims are yours and survive a re-balance. Roles were guessed from file names; the offsets live in Settings. ({roleLabel("leadVocal")} on top, cymbals and room mics lowest.)
       </p>
     </div>
   );

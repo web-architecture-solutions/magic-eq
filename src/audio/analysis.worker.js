@@ -10,7 +10,6 @@ self.onmessage = (e) => {
       analysis.bandPower.buffer,
       analysis.bandDb.buffer,
       analysis.S.buffer,
-      analysis.E.buffer,
       analysis.frameRmsDb.buffer,
       analysis.active.buffer,
       analysis.erb.energies.buffer,

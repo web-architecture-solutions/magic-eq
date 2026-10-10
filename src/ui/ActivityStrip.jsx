@@ -1,5 +1,5 @@
-// Where a stem is active over the song, with the playhead. This is what the
-// gate sees; cuts caused by this stem follow these segments.
+// Where a stem is active over the song, with the playhead. Only these
+// frames go into the stem's long-term spectrum.
 export default function ActivityStrip({ transitions, duration, position, activeFraction }) {
   if (!duration) return null;
   const segs = [];

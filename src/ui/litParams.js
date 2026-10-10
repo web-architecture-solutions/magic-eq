@@ -37,7 +37,7 @@ export const LIT_PARAMS = {
     name: "Cut",
     provenance: "documented",
     source: "Hafezi & Reiss 2015: the masker is attenuated at the frequencies where it dominates a maskee.",
-    long: "Masker (the paper) cuts the louder stem where it does not need the band; maskee (Magic's direction) cuts the quieter stem where it loses.",
+    long: "Masker (the paper) cuts the louder stem where it does not need the band; maskee cuts the quieter stem where it loses instead, which is not the paper and raises its masking measure; kept for comparison.",
   },
   litEssentialDb: {
     name: "Essential range",

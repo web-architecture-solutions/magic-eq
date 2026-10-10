@@ -7,7 +7,7 @@ import { integratedLoudness } from "../dsp/loudness.js";
 
 // Hidden-identity, loudness-matched comparison of conditions over a loop.
 // Built-in conditions: the raw stems, the balanced faders without EQ, and
-// both EQ models (Magic and Literature) on those faders. External renders
+// the EQ at its current settings on those faders. External renders
 // (mixes of the same stems from any other tool) can be added as further
 // conditions, so the comparison is apples to apples. Every condition is
 // matched to the same integrated loudness (BS.1770) over the loop.
@@ -50,7 +50,7 @@ function shuffle(arr) {
   return a;
 }
 
-export default function ListeningTest({ stems, buildFlow, sessionRate }) {
+export default function ListeningTest({ stems, curves, sessionRate, eqLabel }) {
   const ready = stems.filter((s) => s.status === "ready");
   const duration = ready.reduce((m, s) => Math.max(m, s.durationSec), 0);
   const [start, setStart] = useState(0);
@@ -89,19 +89,15 @@ export default function ListeningTest({ stems, buildFlow, sessionRate }) {
     const idx = ready.map((s) => stems.indexOf(s));
     const win = { startSec: start, lengthSec: length };
     const flat = new Float64Array(16);
-    const magic = buildFlow("magic");
-    const lit = buildFlow("lit");
-    const eqSpecs = ({ curves }) => idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i], q: curves.bandQ || 0, hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0 }));
     const plan = [
-      ["raw", "Raw stems (every fader at 0 dB, no EQ)", idx.map(() => ({ faderDb: 0, makeupDb: 0, gains: flat })), null],
-      ["balanced", "Balanced faders, no EQ", idx.map((i) => ({ faderDb: magic.curves.faders[i], makeupDb: 0, gains: flat })), null],
-      ["magic", "Balanced + Magic EQ", eqSpecs(magic), idx.map((i) => magic.timelines[i])],
-      ["lit", "Balanced + Literature EQ", eqSpecs(lit), idx.map((i) => lit.timelines[i])],
+      ["raw", "Raw stems (every fader at 0 dB, no EQ)", idx.map(() => ({ faderDb: 0, makeupDb: 0, gains: flat }))],
+      ["balanced", "Balanced faders, no EQ", idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: 0, gains: flat }))],
+      ["eq", `Balanced + EQ (${eqLabel})`, idx.map((i) => ({ faderDb: curves.faders[i], makeupDb: curves.makeupDb[i], gains: curves.G[i], q: curves.bandQ || 0, hpfHz: curves.hpfHz ? curves.hpfHz[i] : 0 }))],
     ];
     const list = [];
-    for (const [id, name, specs, tl] of plan) {
+    for (const [id, name, specs] of plan) {
       setStatus(`Rendering ${name.toLowerCase()}…`);
-      list.push({ id, name, buffer: await renderMix(ready, specs, tl, sessionRate, win) });
+      list.push({ id, name, buffer: await renderMix(ready, specs, sessionRate, win) });
     }
     for (const ex of externals) {
       setStatus(`Decoding ${ex.name}…`);
@@ -116,7 +112,7 @@ export default function ListeningTest({ stems, buildFlow, sessionRate }) {
     setOrder(shuffle(list.map((c) => c.id)));
     setCurrent(null);
     setStatus(`${list.length} conditions ready, loudness-matched to ${TARGET_LUFS} LUFS (BS.1770) over ${length.toFixed(0)} s from ${start.toFixed(0)} s.`);
-  }, [ready, stems, buildFlow, sessionRate, externals, start, length, stopAll]);
+  }, [ready, stems, curves, eqLabel, sessionRate, externals, start, length, stopAll]);
 
   const play = useCallback(
     async (id) => {
@@ -163,7 +159,7 @@ export default function ListeningTest({ stems, buildFlow, sessionRate }) {
   return (
     <div className="listen">
       <p className="hint">
-        Blind comparison over a loop of the raw stems, the balanced faders, and both EQ models, every one matched to the same integrated loudness. Conditions are shuffled and labelled by letter; identities are revealed only when you ask. Add mixes rendered by other tools from the same stems to compare them on equal terms.
+        Blind comparison over a loop of the raw stems, the balanced faders, and the EQ at its current settings, every one matched to the same integrated loudness (ITU-R BS.1770). Prepare again after changing the EQ to compare settings; add mixes rendered by other tools from the same stems to compare on equal terms. Conditions are shuffled and labelled by letter; identities are revealed only when you ask.
       </p>
       <div className="listen-setup">
         <label className="slider">

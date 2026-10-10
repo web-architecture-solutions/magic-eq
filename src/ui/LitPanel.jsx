@@ -67,7 +67,7 @@ export default function LitPanel({ knobs, dispatch, curves }) {
         <h2>Hafezi &amp; Reiss 2015 · masking reduction</h2>
         <Range k="litAmount" knobs={knobs} dispatch={dispatch} min={0} max={1} step={0.05} />
         <Toggle k="litMasking" knobs={knobs} dispatch={dispatch} />
-        <Select k="litCutTarget" knobs={knobs} dispatch={dispatch} options={[["masker", "the masker where it dominates (paper)"], ["maskee", "the maskee where it loses (Magic)"]]} />
+        <Select k="litCutTarget" knobs={knobs} dispatch={dispatch} options={[["masker", "the masker where it dominates (paper)"], ["maskee", "the maskee where it loses (not the paper)"]]} />
         <Range k="litEssentialDb" knobs={knobs} dispatch={dispatch} min={3} max={30} step={1} unit=" dB" />
         <Range k="litTopK" knobs={knobs} dispatch={dispatch} min={1} max={8} step={1} />
         <Range k="litQ" knobs={knobs} dispatch={dispatch} min={0.5} max={6} step={0.1} />
@@ -81,7 +81,7 @@ export default function LitPanel({ knobs, dispatch, curves }) {
         <h2>De Man &amp; Reiss 2013 · rules</h2>
         <Toggle k="litHpf" knobs={knobs} dispatch={dispatch} />
         <Range k="litHpfHz" knobs={knobs} dispatch={dispatch} min={20} max={200} step={5} unit=" Hz" />
-        <h2>Ours</h2>
+        <h2>Fair listening (ours)</h2>
         <Toggle k="litMakeup" knobs={knobs} dispatch={dispatch} />
         {lm ? (
           <div className="lit-metric" title="Sum over masking occurrences (masker louder in a band essential for the maskee and nonessential for the masker) of the masking value in dB, before and after the EQ. The paper's own kind of objective measure.">

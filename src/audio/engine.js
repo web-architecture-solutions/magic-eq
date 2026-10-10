@@ -11,7 +11,7 @@ export class LiveEngine {
     this.master = ctx.createGain();
     this.master.connect(ctx.destination);
     this.chains = new Map(); // id -> chain
-    this.specs = new Map(); // id -> { ...spec, timeline }
+    this.specs = new Map(); // id -> spec
     this.duration = 0;
     this.playing = false;
     this.startCtx = 0;
@@ -138,20 +138,14 @@ export class LiveEngine {
     }
   }
 
-  // specs: [{ id, faderDb, makeupDb, gains, timeline, bypass, muted }]
+  // specs: [{ id, faderDb, makeupDb, gains, q, hpfHz, bypass, muted }]
   update(specs) {
     for (const spec of specs) {
       const chain = this.chains.get(spec.id);
       if (!chain) continue;
       this.specs.set(spec.id, spec);
       chain.setStatic(spec);
-      if (this.playing && spec.timeline) {
-        chain.schedule(spec.timeline, this.startCtx - this.startOffset, this.position());
-      } else if (spec.timeline) {
-        chain.setGains(spec.timeline.initial);
-      } else {
-        chain.setGains(spec.gains);
-      }
+      chain.setGains(spec.gains);
     }
   }
 
@@ -162,10 +156,8 @@ export class LiveEngine {
     const when = this.ctx.currentTime + START_LATENCY;
     this.startCtx = when;
     this.startOffset = Math.max(0, Math.min(offset, this.duration));
-    for (const [id, chain] of this.chains) {
+    for (const chain of this.chains.values()) {
       chain.start(when, this.startOffset);
-      const spec = this.specs.get(id);
-      if (spec?.timeline) chain.schedule(spec.timeline, when - this.startOffset, this.startOffset);
     }
     this.playing = true;
     clearTimeout(this._endTimer);

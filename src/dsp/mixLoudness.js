@@ -81,6 +81,12 @@ export function chainPower(f, spec, fs) {
   return p * Math.pow(10, (spec.makeupDb || 0) / 10);
 }
 
+// The chain's gain (dB) at each ERB band centre, without make-up: what the
+// masking metric applies to a stem's ERB energies.
+export function erbChainGainsDb(spec, fs) {
+  return Float64Array.from(erbCentres(), (f) => (f >= fs / 2 ? 0 : 10 * Math.log10(chainPower(f, { ...spec, makeupDb: 0 }, fs))));
+}
+
 // Change in a stem's K-weighted power (dB) caused by its chain, weighted by
 // its long-term ERB spectrum (power mean over active frames).
 export function chainLoudnessDeltaDb(erbMeanDb, spec, fs) {

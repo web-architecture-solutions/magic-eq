@@ -115,7 +115,8 @@ export function erbGainsFrom16(gains16) {
 }
 
 // stems: [{ energies, numFrames, active (Uint8Array per frame, optional),
-//           faderDb, makeupDb, gains16 (dB per 16-band, or null) }]
+//           faderDb, makeupDb, gains16 (dB per 16-band, or null),
+//           erbGainsDb (exact chain response per ERB band; wins over gains16) }]
 // Returns per-stem masked fraction and mean SMR over the stem's own cells,
 // plus an energy-weighted session total.
 export function smrReport(stems, { thresholdDb = -6, ownRangeDb = 30, spread = true } = {}) {
@@ -123,7 +124,7 @@ export function smrReport(stems, { thresholdDb = -6, ownRangeDb = 30, spread = t
   const T = Math.max(...stems.map((s) => s.numFrames));
   const B = NUM_ERB;
   const scaled = stems.map((s) => {
-    const g = erbGainsFrom16(s.gains16);
+    const g = s.erbGainsDb ?? erbGainsFrom16(s.gains16);
     const base = ((s.faderDb || 0) + (s.makeupDb || 0)) / 10;
     const lin = new Float64Array(B);
     for (let b = 0; b < B; b++) lin[b] = Math.pow(10, base + g[b] / 10);
@@ -206,7 +207,11 @@ export function smrReport(stems, { thresholdDb = -6, ownRangeDb = 30, spread = t
 }
 
 // Convenience: before/after for a set of analyses and derived curves.
-export function evaluateCurves(analyses, curves, opts) {
+// erbGains (optional): per stem, the exact chain response on the ERB bands
+// (see erbChainGainsDb in mixLoudness.js); otherwise the 16 band gains are
+// mapped by centre frequency.
+export function evaluateCurves(analyses, curves, opts = {}) {
+  const { erbGains, ...rest } = opts;
   const mk = (withGains) =>
     analyses.map((a, i) => ({
       energies: a.erb.energies,
@@ -215,6 +220,7 @@ export function evaluateCurves(analyses, curves, opts) {
       faderDb: curves.faders[i],
       makeupDb: withGains ? curves.makeupDb[i] : 0,
       gains16: withGains ? curves.G[i] : null,
+      erbGainsDb: withGains && erbGains ? erbGains[i] : undefined,
     }));
-  return { before: smrReport(mk(false), opts), after: smrReport(mk(true), opts) };
+  return { before: smrReport(mk(false), rest), after: smrReport(mk(true), rest) };
 }

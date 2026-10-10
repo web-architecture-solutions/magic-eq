@@ -9,12 +9,12 @@ const fmt = (v, d = 1) => (Number.isFinite(v) ? `${v > 0 ? "+" : ""}${v.toFixed(
 // Transport plus the listening comparison: what plays (the raw stems, the
 // balanced faders, or the mix with EQ), loudness-matched at a listening
 // level by a monitor gain that never reaches the export.
-export default function Transport({ engine, canPlay, compare, onCompare, flowLabel, prediction, monitorDb, monitorPeak, masking }) {
+export default function Transport({ engine, canPlay, compare, onCompare, prediction, monitorDb, monitorPeak }) {
   const { playing, position, duration, toggle, seek, meters } = engine;
   const conditions = [
     ["raw", "Raw", "The stems as tracked: every fader at 0 dB, no EQ (key 1)"],
     ["balanced", "Balanced", "The Gain workspace's faders, no EQ (key 2)"],
-    ["eq", `EQ · ${flowLabel}`, `Faders plus the ${flowLabel} EQ (key 3); switch the model in the nav`],
+    ["eq", "EQ", "Faders plus the EQ at its current settings (key 3)"],
   ];
   const L = prediction?.loudness;
   const now = meters?.master;
@@ -78,11 +78,6 @@ export default function Transport({ engine, canPlay, compare, onCompare, flowLab
         {playing && now && Number.isFinite(now.lufsS) ? `${now.lufsS.toFixed(1)} LUFS` : "– LUFS"}
         {clip ? " · may clip" : ""}
       </span>
-      {masking ? (
-        <span className="masking" title="Crude masking score: sum over stem pairs and bands of the overlapping power after the cuts, relative to before. More negative is less overlap.">
-          overlap {masking.ratioDb.toFixed(2)} dB
-        </span>
-      ) : null}
     </section>
   );
 }

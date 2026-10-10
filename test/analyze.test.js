@@ -47,16 +47,16 @@ describe("analyzeStem", () => {
     expect(a.gate.transitions.length).toBe(0);
   });
 
-  it("has E >= S with E == S at the maxima", () => {
+  it("puts two tones in their own bands, relative to the loudest", () => {
     const c = bandCentres();
     const x = sine(sr, 1, c[4], 1);
     const y = sine(sr, 1, c[7], 0.5);
     for (let i = 0; i < x.length; i++) x[i] += y[i];
     const a = analyzeStem(x, sr);
-    for (let b = 0; b < NUM_BANDS; b++) expect(a.E[b]).toBeGreaterThanOrEqual(a.S[b]);
-    expect(a.E[4]).toBe(a.S[4]);
-    expect(a.E[7]).toBe(a.S[7]);
-    expect(a.E[5] - a.S[5]).toBeGreaterThan(10);
+    expect(a.S[4]).toBeCloseTo(0, 6);
+    expect(a.S[7]).toBeCloseTo(-6.02, 0);
+    expect(a.S[5] - a.S[7]).toBeLessThan(-10);
+    for (let b = 0; b < NUM_BANDS; b++) expect(a.S[b]).toBeLessThanOrEqual(0);
   });
 
   it("reports progress", () => {

@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { erbEdges, erbCentres, NUM_ERB, erbFrameEnergies, smrReport, spreadKernel, SPREAD_MIN, evaluateCurves, erbRate } from "../src/dsp/metrics.js";
 import { analyzeStem } from "../src/dsp/analyze.js";
-import { deriveCurves, knobDefaults, perTrackDefaults } from "../src/dsp/model.js";
+import { knobDefaults } from "../src/dsp/common.js";
+import { deriveLitCurves } from "../src/dsp/litModel.js";
+import { erbChainGainsDb } from "../src/dsp/mixLoudness.js";
 import { sine, threeStems, addInto } from "./helpers/synth.js";
 
 const sr = 48000;
@@ -86,16 +88,17 @@ describe("smrReport", () => {
 });
 
 describe("evaluateCurves on the three-stem fixture", () => {
-  it("reduces the masked fraction after deriveCurves", () => {
+  it("improves the masked stem's signal-to-masker ratio after the literature EQ", () => {
     const { bass, guitar, pad } = threeStems(sr, 3);
     const analyses = [bass, guitar, pad].map((x) => analyzeStem(x, sr));
     expect(analyses[0].erb.energies.length).toBe(analyses[0].numFrames * NUM_ERB);
     expect(analyses[0].active.length).toBe(analyses[0].numFrames);
-    const knobs = knobDefaults({ carveDb: 6, scoopDb: 0, floorDb: -24 });
-    const curves = deriveCurves(analyses, [0, 0, -20], [perTrackDefaults(), perTrackDefaults(), perTrackDefaults()], knobs);
-    const { before, after } = evaluateCurves(analyses, curves);
+    // At these faders the guitar masks the pad in one band (see integration test).
+    const curves = deriveLitCurves(analyses, [0, 0, -20], knobDefaults({ litAmount: 1, litHpf: false, litMakeup: false }), ["bass", "rhythm", "pad"]);
+    const erbGains = analyses.map((_, i) => erbChainGainsDb({ gains: curves.G[i], q: curves.bandQ }, sr));
+    const { before, after } = evaluateCurves(analyses, curves, { erbGains });
     expect(before.total.maskedFraction).toBeGreaterThan(0);
-    expect(after.total.maskedFraction).toBeLessThan(before.total.maskedFraction);
-    expect(after.total.meanSmrDb).toBeGreaterThan(before.total.meanSmrDb);
+    expect(after.stems[2].meanSmrDb).toBeGreaterThan(before.stems[2].meanSmrDb);
+    expect(after.total.maskedFraction).toBeLessThanOrEqual(before.total.maskedFraction);
   });
 });

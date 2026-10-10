@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { diffSettings, serializeSettings, parseSettings, loadSettings, saveSettings, isModified, SETTINGS_KEYS, STORAGE_KEY } from "../src/state/settings.js";
-import { knobDefaults } from "../src/dsp/model.js";
+import { knobDefaults } from "../src/dsp/common.js";
 
 function fakeStorage() {
   const m = new Map();
@@ -14,30 +14,31 @@ describe("settings persistence", () => {
   });
 
   it("stores only settings keys that differ from the defaults", () => {
-    const knobs = knobDefaults({ D: 18, carveDb: 9, faders: [1] });
-    expect(diffSettings(knobs)).toEqual({ D: 18 });
+    const knobs = knobDefaults({ targetLufs: -18, litAmount: 0.9, faders: [1] });
+    expect(diffSettings(knobs)).toEqual({ targetLufs: -18 });
     expect(isModified(knobs)).toBe(true);
     expect(isModified(knobDefaults())).toBe(false);
   });
 
   it("round-trips and drops invalid or unknown values", () => {
-    const knobs = knobDefaults({ driveMode: "multiplier", floorDb: -30, psycho: true });
+    const knobs = knobDefaults({ floorDb: -30, targetLufs: -20 });
     const parsed = parseSettings(serializeSettings(knobs));
-    expect(parsed).toEqual({ driveMode: "multiplier", floorDb: -30, psycho: true });
-    expect(parseSettings(JSON.stringify({ version: 1, settings: { D: 999, crossNorm: "nope", carveDb: 7, T: -5 } }))).toEqual({ T: -5 });
-    expect(parseSettings(JSON.stringify({ version: 0, settings: { D: 18 } }))).toEqual({});
+    expect(parsed).toEqual({ floorDb: -30, targetLufs: -20 });
+    // Settings from the archived model (flow, D, driveMode) are ignored.
+    expect(parseSettings(JSON.stringify({ version: 1, settings: { floorDb: 999, flow: "lit", D: 12, driveMode: "presence", targetLufs: -18 } }))).toEqual({ targetLufs: -18 });
+    expect(parseSettings(JSON.stringify({ version: 0, settings: { targetLufs: -18 } }))).toEqual({});
     expect(parseSettings("not json")).toEqual({});
   });
 
   it("saves to and loads from storage, removing the key when nothing differs", () => {
     const store = fakeStorage();
-    saveSettings(knobDefaults({ scoopRange: 20 }), store);
+    saveSettings(knobDefaults({ floorDb: -30 }), store);
     expect(store.map.has(STORAGE_KEY)).toBe(true);
-    expect(loadSettings(store)).toEqual({ scoopRange: 20 });
+    expect(loadSettings(store)).toEqual({ floorDb: -30 });
     saveSettings(knobDefaults(), store);
     expect(store.map.has(STORAGE_KEY)).toBe(false);
     expect(loadSettings(null)).toEqual({});
-    expect(SETTINGS_KEYS).not.toContain("carveDb");
+    expect(SETTINGS_KEYS).not.toContain("litAmount");
     expect(SETTINGS_KEYS).not.toContain("gateDb");
   });
 });
